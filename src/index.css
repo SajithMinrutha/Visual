@@ -1,0 +1,35 @@
+@import "tailwindcss";
+
+@theme {
+  --color-primary: #1a1a1a;
+  --color-accent: #3b82f6;
+}
+
+@layer base {
+  body {
+    @apply bg-zinc-950 text-zinc-100;
+    font-family: 'Inter', sans-serif;
+  }
+}
+
+.masonry {
+  column-count: 1;
+  column-gap: 1.5rem;
+}
+
+@media (min-width: 640px) {
+  .masonry {
+    column-count: 2;
+  }
+}
+
+@media (min-width: 1024px) {
+  .masonry {
+    column-count: 3;
+  }
+}
+
+.masonry-item {
+  break-inside: avoid;
+  margin-bottom: 1.5rem;
+}
