@@ -8,6 +8,7 @@ import {
   List,
   Loader2,
   Shrink,
+  Trash2,
   X,
 } from "lucide-react";
 import { useEffect, useState } from "react";
