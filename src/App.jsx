@@ -446,13 +446,13 @@ const App = () => {
                         >
                           <Download className="w-5 h-5" />
                         </button>
-                        <button
+                        {/* <button
                           onClick={(e) => handleDelete(e, image.id)}
                           className="text-zinc-400 hover:text-red-500 p-3 rounded-xl bg-zinc-800/50 hover:bg-red-500/10 transition-colors"
                           title="Delete"
                         >
                           <Trash2 className="w-5 h-5" />
-                        </button>
+                        </button> */}
                       </div>
                     </>
                   )}
