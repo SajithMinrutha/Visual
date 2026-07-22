@@ -33,7 +33,13 @@ const App = () => {
           .order("id", { ascending: false });
 
         if (error) throw error;
-        if (data) setImages(data);
+        if (data) {
+          // Deduplicate initial fetched records by ID
+          const uniqueData = Array.from(
+            new Map(data.map((item) => [item.id, item])).values(),
+          );
+          setImages(uniqueData);
+        }
       } catch (error) {
         console.error("Error fetching images:", error);
         toast.error("Failed to load gallery");
@@ -51,8 +57,14 @@ const App = () => {
         "postgres_changes",
         { event: "INSERT", schema: "public", table: "images" },
         (payload) => {
-          setImages((prevImages) => [payload.new, ...prevImages]);
-          toast.success("New wallpaper added!");
+          setImages((prevImages) => {
+            // Guard against duplicate renders from self-inserts or network echoes
+            if (prevImages.some((img) => img.id === payload.new.id)) {
+              return prevImages;
+            }
+            toast.success("New wallpaper added!");
+            return [payload.new, ...prevImages];
+          });
         },
       )
       .on(
@@ -520,7 +532,7 @@ const App = () => {
         </button>
       </div>
 
-      {/* Lightbox Overlay (Only here does full original quality load) */}
+      {/* Lightbox Overlay */}
       <AnimatePresence>
         {selectedImage && (
           <motion.div
