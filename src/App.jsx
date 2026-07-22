@@ -25,10 +25,12 @@ const App = () => {
     const fetchImages = async () => {
       setIsLoading(true);
       try {
+        // Order strictly newest-first by created_at, with id as a fallback
         const { data, error } = await supabase
           .from("images")
           .select("*")
-          .order("created_at", { ascending: false });
+          .order("created_at", { ascending: false, nullsFirst: false })
+          .order("id", { ascending: false });
 
         if (error) throw error;
 
@@ -63,13 +65,52 @@ const App = () => {
   };
 
   /**
-   * Converts CDN preview & thumbnail URLs to uncompressed, raw original files
+   * Generates a lightweight, compressed thumbnail for fast homepage loading
+   */
+  const getLowResPreviewUrl = (rawUrl) => {
+    if (!rawUrl) return "";
+    let url = rawUrl;
+
+    // 1. Supabase Storage: Route through render endpoint with compression & downscaling
+    if (url.includes("/storage/v1/object/public/")) {
+      return (
+        url.replace(
+          "/storage/v1/object/public/",
+          "/storage/v1/render/image/public/",
+        ) + "?width=400&quality=50&resize=contain"
+      );
+    }
+
+    // 2. Cloudinary: Apply dynamic low-res downsampling
+    if (url.includes("res.cloudinary.com") && !url.includes("/w_")) {
+      return url.replace("/upload/", "/upload/w_450,q_auto:low,f_auto/");
+    }
+
+    // 3. Zedge CDN: Re-apply thumbnail path optimization if needed
+    if (url.includes("zedge") && !url.includes("/crop/")) {
+      url = url.replace("/image/", "/crop/10/250/250/0/");
+    }
+
+    // 4. Generic CDNs (Unsplash, Imgix, etc.): Inject query parameters for preview sizing
+    try {
+      const urlObj = new URL(url);
+      urlObj.searchParams.set("w", "450");
+      urlObj.searchParams.set("q", "50");
+      urlObj.searchParams.set("auto", "format");
+      return urlObj.toString();
+    } catch {
+      return url;
+    }
+  };
+
+  /**
+   * Converts CDN preview & thumbnail URLs back to uncompressed, raw original files
    */
   const getOriginalQualityUrl = (rawUrl) => {
     if (!rawUrl) return "";
     let url = rawUrl;
 
-    // 1. Zedge CDN: Remove path-based crop boundaries (/crop/10/250/250/0/ -> /image/)
+    // 1. Zedge CDN: Remove path-based crop boundaries
     url = url.replace(/\/crop\/\d+\/\d+\/\d+\/\d+\//i, "/image/");
     url = url.replace(/\/crop\/\d+\/\d+\//i, "/image/");
 
@@ -125,13 +166,11 @@ const App = () => {
     const toastId = toast.loading("Extracting uncompressed original file...");
 
     try {
-      // Get uncompressed CDN source URL
       const highResUrl = getOriginalQualityUrl(rawTargetUrl);
 
-      // Fetch with cache bypass to prevent getting browser's scaled preview cache
+      // Fetch with cache bypass to ensure fresh raw file
       let response = await fetch(highResUrl, { cache: "reload" });
 
-      // Fallback if transformed URL isn't directly reachable
       if (!response.ok) {
         response = await fetch(rawTargetUrl, { cache: "reload" });
       }
@@ -160,13 +199,12 @@ const App = () => {
       });
     } catch (error) {
       console.error("Download failed:", error);
-      // Fallback: Open full resolution image directly in new tab
       window.open(getOriginalQualityUrl(rawTargetUrl), "_blank");
       toast.success("Opened original asset in new tab", { id: toastId });
     }
   };
 
-  // Fallback handler if thumbnail image link fails to load
+  // Fallback handler if image fails to load
   const handleImageError = (e, fallbackUrl) => {
     if (fallbackUrl && e.target.src !== fallbackUrl) {
       e.target.src = fallbackUrl;
@@ -325,7 +363,9 @@ const App = () => {
                 >
                   {viewMode === "grid" && (
                     <img
-                      src={image.thumbnail_url || image.url}
+                      src={getLowResPreviewUrl(
+                        image.thumbnail_url || image.url,
+                      )}
                       alt={image.title || "Wallpaper"}
                       className="w-full h-auto object-cover transition-transform duration-700 group-hover:scale-105"
                       loading="lazy"
@@ -335,7 +375,9 @@ const App = () => {
                   {viewMode === "compact" && (
                     <div className="flex flex-col md:flex-row w-full">
                       <img
-                        src={image.thumbnail_url || image.url}
+                        src={getLowResPreviewUrl(
+                          image.thumbnail_url || image.url,
+                        )}
                         alt={image.title || "Wallpaper"}
                         className="w-full md:w-2/3 h-48 md:h-auto object-cover transition-transform duration-700 group-hover:scale-105"
                         loading="lazy"
@@ -357,7 +399,9 @@ const App = () => {
                   {viewMode === "list" && (
                     <div className="flex flex-col md:flex-row w-full p-4 items-center gap-6">
                       <img
-                        src={image.thumbnail_url || image.url}
+                        src={getLowResPreviewUrl(
+                          image.thumbnail_url || image.url,
+                        )}
                         alt={image.title || "Wallpaper"}
                         className="w-full md:w-1/4 h-32 object-cover rounded-xl transition-transform duration-700 group-hover:scale-105"
                         loading="lazy"
