@@ -13,7 +13,6 @@ cloudinary.config({
 });
 
 // Supabase Config
-// Use the SERVICE_ROLE_KEY for backend operations (writing to DB)
 const supabaseUrl = process.env.VITE_SUPABASE_URL;
 const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
 const supabase = createClient(supabaseUrl, supabaseKey);
@@ -37,13 +36,6 @@ watcher.on('add', async (filePath) => {
     // 1. Upload to Cloudinary
     const uploadResponse = await cloudinary.uploader.upload(filePath, {
       folder: 'gallery',
-      transformation: [
-        {
-          width: 800,
-          crop: 'limit',
-          quality: 'auto',
-        },
-      ],
     });
 
     console.log(`[Cloudinary Upload Success]: ${uploadResponse.secure_url}`);
@@ -55,7 +47,7 @@ watcher.on('add', async (filePath) => {
     const { data, error } = await supabase
       .from('images')
       .insert([{
-        title: fileName.replace(/\.[^/.]+$/, ""), // Remove file extension for title
+        title: fileName.replace(/\.[^/.]+$/, ""),
         url: uploadResponse.secure_url,
         thumbnail_url: thumbUrl
       }])
