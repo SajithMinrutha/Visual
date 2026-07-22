@@ -449,13 +449,13 @@ const App = () => {
                         >
                           <Download className="w-5 h-5" />
                         </button>
-                        {/* <button
+                        <button
                           onClick={(e) => handleDelete(e, image.id)}
                           className="text-zinc-400 hover:text-red-500 p-3 rounded-xl bg-zinc-800/50 hover:bg-red-500/10 transition-colors"
                           title="Delete"
                         >
                           <Trash2 className="w-5 h-5" />
-                        </button> */}
+                        </button>
                       </div>
                     </>
                   )}
@@ -484,12 +484,12 @@ const App = () => {
                           >
                             <Download className="w-4 h-4" />
                           </button>
-                          {/* <button
+                          <button
                             onClick={(e) => handleDelete(e, image.id)}
                             className="bg-red-500/20 hover:bg-red-500 text-red-500 hover:text-white p-2.5 rounded-full backdrop-blur-md transition-colors"
                           >
                             <Trash2 className="w-4 h-4" />
-                          </button> */}
+                          </button>
                         </div>
                       </div>
                     </div>
@@ -576,13 +576,13 @@ const App = () => {
                     <Download className="w-5 h-5" />
                     Download Original
                   </button>
-                  {/* <button
+                  <button
                     onClick={(e) => handleDelete(e, selectedImage.id)}
                     className="flex-none flex justify-center items-center gap-2 bg-zinc-900 text-red-500 hover:bg-red-500 hover:text-white border border-red-500/20 px-8 py-3.5 rounded-full font-semibold transition-all duration-200 active:scale-95"
                   >
                     <Trash2 className="w-5 h-5" />
                     Delete
-                  </button> */}
+                  </button>
                 </div>
               </div>
             </motion.div>
