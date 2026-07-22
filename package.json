@@ -8,7 +8,7 @@
     "build": "vite build",
     "lint": "oxlint",
     "preview": "vite preview",
-    "watch": "node scripts/watcher.js"
+    "watch": "node scripts/watcher.cjs"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.110.8",
