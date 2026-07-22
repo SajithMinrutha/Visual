@@ -261,18 +261,6 @@ const App = () => {
               >
                 Gallery
               </a>
-              <a
-                href="#"
-                className="text-sm font-medium text-zinc-400 hover:text-white transition-colors"
-              >
-                About
-              </a>
-              <a
-                href="#"
-                className="text-sm font-medium text-zinc-400 hover:text-white transition-colors"
-              >
-                Contact
-              </a>
             </div>
           </div>
         </div>
