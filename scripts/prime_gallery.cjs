@@ -36,7 +36,10 @@ async function primeGallery() {
         transformation: [{ width: 800, crop: 'limit', quality: 'auto' }],
       });
 
-      const thumbUrl = uploadResponse.secure_url.replace('/upload/', '/upload/w_400,c_fill,q_60/');
+      const thumbUrl = uploadResponse.secure_url.replace(
+      /\/(upload\/\w+\/)(.*)\/(.*)\./,
+      `/$1w_400,c_fill,q_60/$2/$3`
+    );
 
       const { error } = await supabase
         .from('images')
