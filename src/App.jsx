@@ -1,33 +1,43 @@
-import React, { useState, useEffect } from 'react';
-import { Download, Image as ImageIcon, Loader2, Menu, X, Trash2, LayoutGrid, List, Shrink } from 'lucide-react';
-import { motion, AnimatePresence } from 'framer-motion';
-import toast, { Toaster } from 'react-hot-toast';
-import { supabase } from './utils/supabase';
+import { AnimatePresence, motion } from "framer-motion";
+import {
+  Download,
+  Image as ImageIcon,
+  LayoutGrid,
+  List,
+  Loader2,
+  Menu,
+  Shrink,
+  Trash2,
+  X,
+} from "lucide-react";
+import { useEffect, useState } from "react";
+import toast, { Toaster } from "react-hot-toast";
+import { supabase } from "./utils/supabase";
 
 const App = () => {
   const [images, setImages] = useState([]);
   const [isLoading, setIsLoading] = useState(true);
   const [selectedImage, setSelectedImage] = useState(null);
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
-  const [viewMode, setViewMode] = useState('grid'); // 'grid', 'compact', 'list'
+  const [viewMode, setViewMode] = useState("grid"); // 'grid', 'compact', 'list'
 
   useEffect(() => {
     const fetchImages = async () => {
       setIsLoading(true);
       try {
         const { data, error } = await supabase
-          .from('images')
-          .select('*')
-          .order('created_at', { ascending: false });
+          .from("images")
+          .select("*")
+          .order("created_at", { ascending: false });
 
         if (error) throw error;
-        
+
         if (data) {
           setImages(data);
         }
       } catch (error) {
-        console.error('Error fetching images:', error);
-        toast.error('Failed to load gallery');
+        console.error("Error fetching images:", error);
+        toast.error("Failed to load gallery");
       } finally {
         setIsLoading(false);
       }
@@ -37,48 +47,116 @@ const App = () => {
   }, []);
 
   const handleDelete = async (id) => {
-    if (!window.confirm('Are you sure you want to delete this image?')) return;
-    
+    if (!window.confirm("Are you sure you want to delete this image?")) return;
+
     try {
-      const { error } = await supabase
-        .from('images')
-        .delete()
-        .eq('id', id);
+      const { error } = await supabase.from("images").delete().eq("id", id);
 
       if (error) throw error;
-      
-      setImages(prev => prev.filter(img => img.id !== id));
-      toast.success('Image deleted successfully');
+
+      setImages((prev) => prev.filter((img) => img.id !== id));
+      toast.success("Image deleted successfully");
     } catch (error) {
-      console.error('Error deleting image:', error);
-      toast.error('Failed to delete image');
+      console.error("Error deleting image:", error);
+      toast.error("Failed to delete image");
     }
   };
 
-  const handleDownload = async (url) => {
+  // High-Resolution Download Handler
+  const handleDownload = async (image) => {
+    if (!image) return;
+
+    // 1. Prioritize full resolution / HD URLs over preview thumbnails
+    const targetUrl =
+      image.original_url ||
+      image.hd_url ||
+      image.full_url ||
+      image.url ||
+      image.thumbnail_url;
+
+    if (!targetUrl) {
+      toast.error("Download URL not found");
+      return;
+    }
+
+    const toastId = toast.loading("Downloading highest quality asset...");
+
     try {
-      const response = await fetch(url);
-      if (!response.ok) throw new Error('Network response was not ok');
+      // 2. Strip CDN quality/resizing query parameters to fetch raw original file
+      let cleanUrl = targetUrl;
+      try {
+        const urlObj = new URL(targetUrl);
+        // Remove common CDN downscaling parameters
+        const paramsToRemove = [
+          "w",
+          "h",
+          "width",
+          "height",
+          "quality",
+          "q",
+          "fit",
+          "crop",
+          "resize",
+        ];
+        paramsToRemove.forEach((p) => urlObj.searchParams.delete(p));
+        cleanUrl = urlObj.toString();
+      } catch (e) {
+        // Fallback if URL parsing fails
+        cleanUrl = targetUrl;
+      }
+
+      // 3. Fetch image as blob
+      let response = await fetch(cleanUrl);
+
+      // If cleaned URL fails, fallback to original target URL
+      if (!response.ok) {
+        response = await fetch(targetUrl);
+      }
+
+      if (!response.ok)
+        throw new Error("Failed to fetch high-res image source");
+
       const blob = await response.blob();
       const blobUrl = window.URL.createObjectURL(blob);
-      const link = document.createElement('a');
+
+      // 4. Create clean download filename
+      const cleanTitle = image.title
+        ? image.title.toLowerCase().replace(/[^a-z0-9]/g, "_")
+        : "wallpaper";
+      const fileName = `${cleanTitle}_original_${Date.now()}.jpg`;
+
+      const link = document.createElement("a");
       link.href = blobUrl;
-      link.download = `wallpaper_${Date.now()}.jpg`;
+      link.download = fileName;
       document.body.appendChild(link);
       link.click();
       document.body.removeChild(link);
       window.URL.revokeObjectURL(blobUrl);
-      toast.success('Download started!');
+
+      toast.success("Original high-quality download complete!", {
+        id: toastId,
+      });
     } catch (error) {
-      console.error('Download failed:', error);
-      toast.error('Failed to download image');
+      console.error("Download failed:", error);
+      // Fallback: Open full resolution image in a new tab for direct download
+      window.open(targetUrl, "_blank");
+      toast.success("Opened original high-res image in new tab", {
+        id: toastId,
+      });
+    }
+  };
+
+  // Fallback handler if thumbnail image link fails to load
+  const handleImageError = (e, fallbackUrl) => {
+    if (fallbackUrl && e.target.src !== fallbackUrl) {
+      e.target.src = fallbackUrl;
     }
   };
 
   return (
     <div className="min-h-screen bg-[#09090b] text-zinc-100 selection:bg-blue-500/30">
       <Toaster position="bottom-right" />
-      
+
       {/* Navigation */}
       <nav className="fixed top-0 w-full z-40 bg-[#09090b]/80 backdrop-blur-md border-b border-zinc-800">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
@@ -87,13 +165,30 @@ const App = () => {
               <div className="w-8 h-8 bg-blue-600 rounded-lg flex items-center justify-center">
                 <span className="font-bold text-white">D</span>
               </div>
-              <span className="text-xl font-bold tracking-tight">Duffer Wallpapers</span>
+              <span className="text-xl font-bold tracking-tight">
+                Duffer Wallpapers
+              </span>
             </div>
-            
+
             <div className="hidden md:flex items-center gap-8">
-              <a href="#" className="text-sm font-medium hover:text-blue-400 transition-colors">Gallery</a>
-              <a href="#" className="text-sm font-medium hover:text-blue-400 transition-colors">About</a>
-              <a href="#" className="text-sm font-medium hover:text-blue-400 transition-colors">Contact</a>
+              <a
+                href="#"
+                className="text-sm font-medium hover:text-blue-400 transition-colors"
+              >
+                Gallery
+              </a>
+              <a
+                href="#"
+                className="text-sm font-medium hover:text-blue-400 transition-colors"
+              >
+                About
+              </a>
+              <a
+                href="#"
+                className="text-sm font-medium hover:text-blue-400 transition-colors"
+              >
+                Contact
+              </a>
             </div>
 
             <div className="md:hidden">
@@ -107,16 +202,22 @@ const App = () => {
         {/* Mobile Menu */}
         <AnimatePresence>
           {isMobileMenuOpen && (
-            <motion.div 
+            <motion.div
               initial={{ opacity: 0, height: 0 }}
-              animate={{ opacity: 1, height: 'auto' }}
+              animate={{ opacity: 1, height: "auto" }}
               exit={{ opacity: 0, height: 0 }}
               className="md:hidden bg-[#09090b] border-b border-zinc-800 overflow-hidden"
             >
               <div className="flex flex-col gap-4 p-4">
-                <a href="#" className="text-sm font-medium">Gallery</a>
-                <a href="#" className="text-sm font-medium">About</a>
-                <a href="#" className="text-sm font-medium">Contact</a>
+                <a href="#" className="text-sm font-medium">
+                  Gallery
+                </a>
+                <a href="#" className="text-sm font-medium">
+                  About
+                </a>
+                <a href="#" className="text-sm font-medium">
+                  Contact
+                </a>
               </div>
             </motion.div>
           )}
@@ -125,20 +226,21 @@ const App = () => {
 
       <header className="pt-32 pb-16 px-4 md:px-8">
         <div className="max-w-4xl mx-auto text-center">
-          <motion.h1 
+          <motion.h1
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
             className="text-5xl md:text-7xl font-black mb-6 bg-clip-text text-transparent bg-gradient-to-b from-white to-zinc-500"
           >
             Premium Wallpapers
           </motion.h1>
-          <motion.p 
+          <motion.p
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ delay: 0.1 }}
             className="text-zinc-400 text-lg md:text-xl max-w-2xl mx-auto"
           >
-            Explore our curated collection of high-definition wallpapers, capturing moments from around the globe in stunning detail.
+            Explore our curated collection of high-definition wallpapers,
+            capturing moments from around the globe in stunning detail.
           </motion.p>
         </div>
       </header>
@@ -146,23 +248,23 @@ const App = () => {
       <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pb-24">
         <div className="flex flex-col sm:flex-row sm:items-center justify-between mb-8 gap-4">
           <div className="flex items-center gap-4 bg-zinc-900 p-1 rounded-xl border border-zinc-800">
-            <button 
-              onClick={() => setViewMode('grid')}
-              className={`p-2 rounded-lg transition-all ${viewMode === 'grid' ? 'bg-blue-600 text-white' : 'text-zinc-500 hover:text-white'}`}
+            <button
+              onClick={() => setViewMode("grid")}
+              className={`p-2 rounded-lg transition-all ${viewMode === "grid" ? "bg-blue-600 text-white" : "text-zinc-500 hover:text-white"}`}
               title="Grid View"
             >
               <LayoutGrid className="w-5 h-5" />
             </button>
-            <button 
-              onClick={() => setViewMode('compact')}
-              className={`p-2 rounded-lg transition-all ${viewMode === 'compact' ? 'bg-blue-600 text-white' : 'text-zinc-500 hover:text-white'}`}
+            <button
+              onClick={() => setViewMode("compact")}
+              className={`p-2 rounded-lg transition-all ${viewMode === "compact" ? "bg-blue-600 text-white" : "text-zinc-500 hover:text-white"}`}
               title="Compact View"
             >
               <Shrink className="w-5 h-5" />
             </button>
-            <button 
-              onClick={() => setViewMode('list')}
-              className={`p-2 rounded-lg transition-all ${viewMode === 'list' ? 'bg-blue-600 text-white' : 'text-zinc-500 hover:text-white'}`}
+            <button
+              onClick={() => setViewMode("list")}
+              className={`p-2 rounded-lg transition-all ${viewMode === "list" ? "bg-blue-600 text-white" : "text-zinc-500 hover:text-white"}`}
               title="List View"
             >
               <List className="w-5 h-5" />
@@ -182,7 +284,9 @@ const App = () => {
               <div className="text-center py-40">
                 <div className="bg-zinc-900 p-12 rounded-3xl border border-zinc-800 max-w-md mx-auto">
                   <ImageIcon className="w-16 h-16 text-zinc-700 mx-auto mb-4" />
-                  <p className="text-zinc-400">No images found in the gallery.</p>
+                  <p className="text-zinc-400">
+                    No images found in the gallery.
+                  </p>
                 </div>
               </div>
             ) : (
@@ -190,77 +294,118 @@ const App = () => {
                 <motion.div
                   key={image.id}
                   layoutId={`image-${image.id}`}
-                  className={`relative group overflow-hidden rounded-3xl bg-zinc-900 border border-zinc-800/50 ${
-                    viewMode === 'grid' ? 'col-span-1' : 
-                    viewMode === 'compact' ? 'col-span-1 md:col-span-2' : 
-                    'col-span-full flex flex-col md:flex-row'
+                  className={`relative group overflow-hidden rounded-3xl bg-zinc-900 border border-zinc-800/50 cursor-pointer ${
+                    viewMode === "grid"
+                      ? "col-span-1"
+                      : viewMode === "compact"
+                        ? "col-span-1 md:col-span-2"
+                        : "col-span-full flex flex-col md:flex-row"
                   }`}
                   onClick={() => setSelectedImage(image)}
                 >
-                  {viewMode === 'grid' && (
+                  {viewMode === "grid" && (
                     <img
-                      src={image.thumbnail_url}
-                      alt={image.title}
+                      src={image.thumbnail_url || image.url}
+                      alt={image.title || "Wallpaper"}
                       className="w-full h-auto object-cover transition-transform duration-700 group-hover:scale-105"
                       loading="lazy"
+                      onError={(e) => handleImageError(e, image.url)}
                     />
                   )}
-                  {viewMode === 'compact' && (
+                  {viewMode === "compact" && (
                     <div className="flex flex-col md:flex-row w-full">
                       <img
-                        src={image.thumbnail_url}
-                        alt={image.title}
+                        src={image.thumbnail_url || image.url}
+                        alt={image.title || "Wallpaper"}
                         className="w-full md:w-2/3 h-48 md:h-auto object-cover transition-transform duration-700 group-hover:scale-105"
                         loading="lazy"
+                        onError={(e) => handleImageError(e, image.url)}
                       />
                       <div className="p-4 flex flex-col justify-center flex-1">
                         <p className="text-white font-medium">{image.title}</p>
                         <div className="flex gap-2 mt-2">
-                          <span className="text-xs text-zinc-300 bg-white/10 backdrop-blur-md px-2 py-1 rounded">HD</span>
-                          <span className="text-xs text-zinc-300 bg-white/10 backdrop-blur-md px-2 py-1 rounded">Raw</span>
+                          <span className="text-xs text-zinc-300 bg-white/10 backdrop-blur-md px-2 py-1 rounded">
+                            HD
+                          </span>
+                          <span className="text-xs text-zinc-300 bg-white/10 backdrop-blur-md px-2 py-1 rounded">
+                            Raw
+                          </span>
                         </div>
                       </div>
                     </div>
                   )}
-                  {viewMode === 'list' && (
+                  {viewMode === "list" && (
                     <div className="flex flex-col md:flex-row w-full p-4 items-center gap-6">
                       <img
-                        src={image.thumbnail_url}
-                        alt={image.title}
+                        src={image.thumbnail_url || image.url}
+                        alt={image.title || "Wallpaper"}
                         className="w-full md:w-1/4 h-32 object-cover rounded-xl transition-transform duration-700 group-hover:scale-105"
                         loading="lazy"
+                        onError={(e) => handleImageError(e, image.url)}
                       />
                       <div className="flex-1">
                         <h3 className="text-xl font-bold">{image.title}</h3>
-                        <p className="text-zinc-400 text-sm">High definition wallpaper asset</p>
+                        <p className="text-zinc-400 text-sm">
+                          High definition wallpaper asset
+                        </p>
                       </div>
-                      <div className="flex gap-4">
-                        <button className="text-zinc-500 hover:text-white"><ImageIcon className="w-6 h-6" /></button>
-                        <button className="text-zinc-500 hover:text-white"><Download className="w-6 h-6" /></button>
+                      <div className="flex gap-3">
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            handleDownload(image);
+                          }}
+                          className="text-zinc-400 hover:text-white p-2 rounded-lg bg-zinc-800/50 hover:bg-zinc-800 transition-colors"
+                          title="Download Original Quality"
+                        >
+                          <Download className="w-5 h-5" />
+                        </button>
                       </div>
                     </div>
                   )}
-                  
-                  <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-transparent to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300 flex flex-col justify-end p-6">
-                    <div className="flex justify-between items-center">
-                      <div>
-                        <p className="text-white font-medium">{image.title}</p>
-                        <div className="flex gap-2 mt-1">
-                          <span className="text-xs text-zinc-300 bg-white/10 backdrop-blur-md px-2 py-1 rounded">HD</span>
-                          <span className="text-xs text-zinc-300 bg-white/10 backdrop-blur-md px-2 py-1 rounded">Raw</span>
+
+                  {/* Hover Overlay for Grid & Compact */}
+                  {viewMode !== "list" && (
+                    <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-transparent to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300 flex flex-col justify-end p-6">
+                      <div className="flex justify-between items-center">
+                        <div>
+                          <p className="text-white font-medium">
+                            {image.title}
+                          </p>
+                          <div className="flex gap-2 mt-1">
+                            <span className="text-xs text-zinc-300 bg-white/10 backdrop-blur-md px-2 py-1 rounded">
+                              HD
+                            </span>
+                            <span className="text-xs text-zinc-300 bg-white/10 backdrop-blur-md px-2 py-1 rounded">
+                              Raw
+                            </span>
+                          </div>
+                        </div>
+                        <div className="flex items-center gap-2">
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              handleDownload(image);
+                            }}
+                            className="bg-white/20 hover:bg-white text-white hover:text-black p-2 rounded-full transition-colors"
+                            title="Download Original Quality"
+                          >
+                            <Download className="w-5 h-5" />
+                          </button>
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              handleDelete(image.id);
+                            }}
+                            className="bg-red-500/20 hover:bg-red-500 text-red-500 hover:text-white p-2 rounded-full transition-colors"
+                            title="Delete Asset"
+                          >
+                            <Trash2 className="w-5 h-5" />
+                          </button>
                         </div>
                       </div>
-                      <button 
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          handleDelete(image.id);
-                        }}
-                        className="bg-red-500/20 hover:bg-red-500 text-red-500 hover:text-white p-2 rounded-full transition-colors"
-                      >
-                        <Trash2 className="w-5 h-5" />
-                      </button>
                     </div>
-                  </div>
+                  )}
                 </motion.div>
               ))
             )}
@@ -271,14 +416,14 @@ const App = () => {
       {/* Lightbox Overlay */}
       <AnimatePresence>
         {selectedImage && (
-          <motion.div 
+          <motion.div
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
             className="fixed inset-0 bg-black/95 z-50 flex items-center justify-center p-4 md:p-10 backdrop-blur-xl"
             onClick={() => setSelectedImage(null)}
           >
-            <motion.div 
+            <motion.div
               initial={{ scale: 0.9, opacity: 0 }}
               animate={{ scale: 1, opacity: 1 }}
               exit={{ scale: 0.9, opacity: 0 }}
@@ -286,34 +431,46 @@ const App = () => {
               onClick={(e) => e.stopPropagation()}
             >
               <div className="relative w-full h-full flex items-center justify-center">
-                <img 
-                  src={selectedImage.url} 
-                  alt={selectedImage.title} 
+                <img
+                  src={
+                    selectedImage.original_url ||
+                    selectedImage.hd_url ||
+                    selectedImage.url ||
+                    selectedImage.thumbnail_url
+                  }
+                  alt={selectedImage.title}
                   className="max-h-[85vh] w-full object-contain rounded-xl shadow-2xl"
+                  onError={(e) =>
+                    handleImageError(e, selectedImage.thumbnail_url)
+                  }
                 />
-                <button 
+                <button
                   className="absolute top-4 right-4 text-white/70 hover:text-white transition-colors p-2"
                   onClick={() => setSelectedImage(null)}
                 >
                   <X className="w-10 h-10" />
                 </button>
               </div>
-              
+
               <div className="mt-8 flex flex-col items-center gap-6">
                 <div className="text-center">
-                  <h2 className="text-3xl md:text-5xl font-bold text-white mb-2">{selectedImage.title}</h2>
-                  <p className="text-zinc-400">Full Resolution Gallery Asset</p>
+                  <h2 className="text-3xl md:text-5xl font-bold text-white mb-2">
+                    {selectedImage.title}
+                  </h2>
+                  <p className="text-zinc-400">
+                    Full Uncompressed Resolution Gallery Asset
+                  </p>
                 </div>
-                
+
                 <div className="flex gap-4">
-                  <button 
-                    onClick={() => handleDownload(selectedImage.url)}
+                  <button
+                    onClick={() => handleDownload(selectedImage)}
                     className="flex items-center gap-3 bg-white text-black hover:bg-zinc-200 px-10 py-4 rounded-full font-bold transition-all duration-200 transform hover:scale-105 active:scale-95 shadow-[0_0_20px_rgba(255,255,255,0.1)]"
                   >
                     <Download className="w-5 h-5" />
-                    Download Full Resolution
+                    Download Full Original Quality
                   </button>
-                  <button 
+                  <button
                     onClick={() => handleDelete(selectedImage.id)}
                     className="flex items-center gap-3 bg-red-600 text-white hover:bg-red-700 px-10 py-4 rounded-full font-bold transition-all duration-200 transform hover:scale-105 active:scale-95 shadow-[0_0_20px_rgba(220,38,38,0.2)]"
                   >
@@ -335,10 +492,22 @@ const App = () => {
             </div>
             <span className="font-bold">Duffer Wallpapers</span>
           </div>
-          <p className="text-zinc-500 text-sm">© 2026 Duffer Wallpapers. All rights reserved.</p>
+          <p className="text-zinc-500 text-sm">
+            © 2026 Duffer Wallpapers. All rights reserved.
+          </p>
           <div className="flex gap-6">
-            <a href="#" className="text-zinc-500 hover:text-white transition-colors">Twitter</a>
-            <a href="#" className="text-zinc-500 hover:text-white transition-colors">Instagram</a>
+            <a
+              href="#"
+              className="text-zinc-500 hover:text-white transition-colors"
+            >
+              Twitter
+            </a>
+            <a
+              href="#"
+              className="text-zinc-500 hover:text-white transition-colors"
+            >
+              Instagram
+            </a>
           </div>
         </div>
       </footer>
