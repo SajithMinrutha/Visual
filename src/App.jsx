@@ -25,7 +25,6 @@ const App = () => {
     const fetchImages = async () => {
       setIsLoading(true);
       try {
-        // Order strictly newest-first by created_at, with id as a fallback
         const { data, error } = await supabase
           .from("images")
           .select("*")
@@ -33,10 +32,7 @@ const App = () => {
           .order("id", { ascending: false });
 
         if (error) throw error;
-
-        if (data) {
-          setImages(data);
-        }
+        if (data) setImages(data);
       } catch (error) {
         console.error("Error fetching images:", error);
         toast.error("Failed to load gallery");
@@ -50,12 +46,9 @@ const App = () => {
 
   const handleDelete = async (id) => {
     if (!window.confirm("Are you sure you want to delete this image?")) return;
-
     try {
       const { error } = await supabase.from("images").delete().eq("id", id);
-
       if (error) throw error;
-
       setImages((prev) => prev.filter((img) => img.id !== id));
       toast.success("Image deleted successfully");
     } catch (error) {
@@ -64,14 +57,9 @@ const App = () => {
     }
   };
 
-  /**
-   * Generates a lightweight, compressed thumbnail for fast homepage loading
-   */
   const getLowResPreviewUrl = (rawUrl) => {
     if (!rawUrl) return "";
     let url = rawUrl;
-
-    // 1. Supabase Storage: Route through render endpoint with compression & downscaling
     if (url.includes("/storage/v1/object/public/")) {
       return (
         url.replace(
@@ -80,18 +68,12 @@ const App = () => {
         ) + "?width=400&quality=50&resize=contain"
       );
     }
-
-    // 2. Cloudinary: Apply dynamic low-res downsampling
     if (url.includes("res.cloudinary.com") && !url.includes("/w_")) {
       return url.replace("/upload/", "/upload/w_450,q_auto:low,f_auto/");
     }
-
-    // 3. Zedge CDN: Re-apply thumbnail path optimization if needed
     if (url.includes("zedge") && !url.includes("/crop/")) {
       url = url.replace("/image/", "/crop/10/250/250/0/");
     }
-
-    // 4. Generic CDNs (Unsplash, Imgix, etc.): Inject query parameters for preview sizing
     try {
       const urlObj = new URL(url);
       urlObj.searchParams.set("w", "450");
@@ -103,29 +85,18 @@ const App = () => {
     }
   };
 
-  /**
-   * Converts CDN preview & thumbnail URLs back to uncompressed, raw original files
-   */
   const getOriginalQualityUrl = (rawUrl) => {
     if (!rawUrl) return "";
     let url = rawUrl;
-
-    // 1. Zedge CDN: Remove path-based crop boundaries
     url = url.replace(/\/crop\/\d+\/\d+\/\d+\/\d+\//i, "/image/");
     url = url.replace(/\/crop\/\d+\/\d+\//i, "/image/");
-
-    // 2. Supabase Storage: Bypass image optimization worker, fetch raw object
     url = url.replace(
       "/storage/v1/render/image/public/",
       "/storage/v1/object/public/",
     );
-
-    // 3. Cloudinary: Remove scaling / downsampling parameters
     url = url
       .replace(/\/c_scale,[^/]+\//i, "/")
       .replace(/\/w_\d+[^/]*\//i, "/");
-
-    // 4. Strip CDN URL Query Parameters (Unsplash, Imgix, etc.)
     try {
       const urlObj = new URL(url);
       const paramsToClear = [
@@ -148,10 +119,8 @@ const App = () => {
     }
   };
 
-  // High-Resolution Download Engine
   const handleDownload = async (image) => {
     if (!image) return;
-
     const rawTargetUrl =
       image.original_url ||
       image.hd_url ||
@@ -162,25 +131,17 @@ const App = () => {
       toast.error("Download URL not found");
       return;
     }
-
     const toastId = toast.loading("Extracting uncompressed original file...");
-
     try {
       const highResUrl = getOriginalQualityUrl(rawTargetUrl);
-
-      // Fetch with cache bypass to ensure fresh raw file
       let response = await fetch(highResUrl, { cache: "reload" });
-
-      if (!response.ok) {
+      if (!response.ok)
         response = await fetch(rawTargetUrl, { cache: "reload" });
-      }
-
       if (!response.ok)
         throw new Error("Failed to fetch high-res image source");
 
       const blob = await response.blob();
       const blobUrl = window.URL.createObjectURL(blob);
-
       const cleanTitle = image.title
         ? image.title.toLowerCase().replace(/[^a-z0-9]/g, "_")
         : "wallpaper";
@@ -204,7 +165,6 @@ const App = () => {
     }
   };
 
-  // Fallback handler if image fails to load
   const handleImageError = (e, fallbackUrl) => {
     if (fallbackUrl && e.target.src !== fallbackUrl) {
       e.target.src = fallbackUrl;
@@ -212,16 +172,16 @@ const App = () => {
   };
 
   return (
-    <div className="min-h-screen bg-[#09090b] text-zinc-100 selection:bg-blue-500/30">
+    <div className="min-h-screen bg-[#09090b] text-zinc-100 selection:bg-blue-500/30 font-sans">
       <Toaster position="bottom-right" />
 
       {/* Navigation */}
-      <nav className="fixed top-0 w-full z-40 bg-[#09090b]/80 backdrop-blur-md border-b border-zinc-800">
+      <nav className="fixed top-0 w-full z-40 bg-[#09090b]/80 backdrop-blur-md border-b border-zinc-800/50">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex items-center justify-between h-16">
-            <div className="flex items-center gap-2">
-              <div className="w-8 h-8 bg-blue-600 rounded-lg flex items-center justify-center">
-                <span className="font-bold text-white">D</span>
+            <div className="flex items-center gap-3">
+              <div className="w-8 h-8 bg-blue-600 rounded-lg flex items-center justify-center shadow-lg shadow-blue-500/20">
+                <span className="font-bold text-white text-sm">D</span>
               </div>
               <span className="text-xl font-bold tracking-tight">
                 Duffer Wallpapers
@@ -231,27 +191,34 @@ const App = () => {
             <div className="hidden md:flex items-center gap-8">
               <a
                 href="#"
-                className="text-sm font-medium hover:text-blue-400 transition-colors"
+                className="text-sm font-medium text-white hover:text-blue-400 transition-colors"
               >
                 Gallery
               </a>
               <a
                 href="#"
-                className="text-sm font-medium hover:text-blue-400 transition-colors"
+                className="text-sm font-medium text-zinc-400 hover:text-white transition-colors"
               >
                 About
               </a>
               <a
                 href="#"
-                className="text-sm font-medium hover:text-blue-400 transition-colors"
+                className="text-sm font-medium text-zinc-400 hover:text-white transition-colors"
               >
                 Contact
               </a>
             </div>
 
             <div className="md:hidden">
-              <button onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)}>
-                {isMobileMenuOpen ? <X /> : <Menu />}
+              <button
+                onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)}
+                className="p-2 text-zinc-400 hover:text-white"
+              >
+                {isMobileMenuOpen ? (
+                  <X className="w-5 h-5" />
+                ) : (
+                  <Menu className="w-5 h-5" />
+                )}
               </button>
             </div>
           </div>
@@ -264,16 +231,16 @@ const App = () => {
               initial={{ opacity: 0, height: 0 }}
               animate={{ opacity: 1, height: "auto" }}
               exit={{ opacity: 0, height: 0 }}
-              className="md:hidden bg-[#09090b] border-b border-zinc-800 overflow-hidden"
+              className="md:hidden bg-[#09090b] border-b border-zinc-800/50 overflow-hidden"
             >
               <div className="flex flex-col gap-4 p-4">
-                <a href="#" className="text-sm font-medium">
+                <a href="#" className="text-sm font-medium text-white">
                   Gallery
                 </a>
-                <a href="#" className="text-sm font-medium">
+                <a href="#" className="text-sm font-medium text-zinc-400">
                   About
                 </a>
-                <a href="#" className="text-sm font-medium">
+                <a href="#" className="text-sm font-medium text-zinc-400">
                   Contact
                 </a>
               </div>
@@ -287,7 +254,7 @@ const App = () => {
           <motion.h1
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
-            className="text-5xl md:text-7xl font-black mb-6 bg-clip-text text-transparent bg-gradient-to-b from-white to-zinc-500"
+            className="text-5xl md:text-7xl font-black mb-6 tracking-tight text-white"
           >
             Premium Wallpapers
           </motion.h1>
@@ -295,7 +262,7 @@ const App = () => {
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ delay: 0.1 }}
-            className="text-zinc-400 text-lg md:text-xl max-w-2xl mx-auto"
+            className="text-zinc-400 text-lg md:text-xl max-w-2xl mx-auto leading-relaxed"
           >
             Explore our curated collection of high-definition wallpapers,
             capturing moments from around the globe in stunning detail.
@@ -304,45 +271,59 @@ const App = () => {
       </header>
 
       <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pb-24">
+        {/* Toolbar */}
         <div className="flex flex-col sm:flex-row sm:items-center justify-between mb-8 gap-4">
-          <div className="flex items-center gap-4 bg-zinc-900 p-1 rounded-xl border border-zinc-800">
+          <div className="flex items-center gap-1 bg-zinc-900/50 p-1 rounded-xl border border-zinc-800/50 w-fit">
             <button
               onClick={() => setViewMode("grid")}
-              className={`p-2 rounded-lg transition-all ${viewMode === "grid" ? "bg-blue-600 text-white" : "text-zinc-500 hover:text-white"}`}
+              className={`p-2.5 rounded-lg transition-all ${viewMode === "grid" ? "bg-zinc-800 text-white shadow-sm" : "text-zinc-500 hover:text-white"}`}
               title="Grid View"
             >
-              <LayoutGrid className="w-5 h-5" />
+              <LayoutGrid className="w-4 h-4" />
             </button>
             <button
               onClick={() => setViewMode("compact")}
-              className={`p-2 rounded-lg transition-all ${viewMode === "compact" ? "bg-blue-600 text-white" : "text-zinc-500 hover:text-white"}`}
+              className={`p-2.5 rounded-lg transition-all ${viewMode === "compact" ? "bg-zinc-800 text-white shadow-sm" : "text-zinc-500 hover:text-white"}`}
               title="Compact View"
             >
-              <Shrink className="w-5 h-5" />
+              <Shrink className="w-4 h-4" />
             </button>
             <button
               onClick={() => setViewMode("list")}
-              className={`p-2 rounded-lg transition-all ${viewMode === "list" ? "bg-blue-600 text-white" : "text-zinc-500 hover:text-white"}`}
+              className={`p-2.5 rounded-lg transition-all ${viewMode === "list" ? "bg-zinc-800 text-white shadow-sm" : "text-zinc-500 hover:text-white"}`}
               title="List View"
             >
-              <List className="w-5 h-5" />
+              <List className="w-4 h-4" />
             </button>
           </div>
-          <p className="text-zinc-500 text-sm">Showing {images.length} items</p>
+          <p className="text-zinc-500 text-sm font-medium">
+            Showing {images.length} items
+          </p>
         </div>
 
         {isLoading ? (
           <div className="flex flex-col items-center justify-center h-96">
-            <Loader2 className="w-12 h-12 animate-spin text-blue-500 mb-4" />
-            <p className="text-zinc-500">Curating your experience...</p>
+            <Loader2 className="w-8 h-8 animate-spin text-blue-500 mb-4" />
+            <p className="text-zinc-500 text-sm font-medium">
+              Curating your experience...
+            </p>
           </div>
         ) : (
-          <div className="grid gap-6">
+          /* DYNAMIC GRID PARENT */
+          <div
+            className={`grid gap-6 ${
+              viewMode === "grid"
+                ? "grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4"
+                : viewMode === "compact"
+                  ? "grid-cols-1 md:grid-cols-2 lg:grid-cols-3"
+                  : "grid-cols-1 max-w-4xl mx-auto"
+            }`}
+          >
             {images.length === 0 ? (
-              <div className="text-center py-40">
-                <div className="bg-zinc-900 p-12 rounded-3xl border border-zinc-800 max-w-md mx-auto">
-                  <ImageIcon className="w-16 h-16 text-zinc-700 mx-auto mb-4" />
-                  <p className="text-zinc-400">
+              <div className="col-span-full text-center py-40">
+                <div className="bg-zinc-900/50 p-12 rounded-3xl border border-zinc-800/50 max-w-md mx-auto">
+                  <ImageIcon className="w-12 h-12 text-zinc-700 mx-auto mb-4" />
+                  <p className="text-zinc-400 font-medium">
                     No images found in the gallery.
                   </p>
                 </div>
@@ -352,119 +333,137 @@ const App = () => {
                 <motion.div
                   key={image.id}
                   layoutId={`image-${image.id}`}
-                  className={`relative group overflow-hidden rounded-3xl bg-zinc-900 border border-zinc-800/50 cursor-pointer ${
-                    viewMode === "grid"
-                      ? "col-span-1"
-                      : viewMode === "compact"
-                        ? "col-span-1 md:col-span-2"
-                        : "col-span-full flex flex-col md:flex-row"
-                  }`}
                   onClick={() => setSelectedImage(image)}
+                  className={`relative group overflow-hidden rounded-2xl bg-zinc-900 border border-zinc-800/50 cursor-pointer transition-all hover:border-zinc-700 ${
+                    viewMode === "list"
+                      ? "flex flex-col sm:flex-row items-center p-3 gap-6"
+                      : ""
+                  }`}
                 >
+                  {/* GRID VIEW */}
                   {viewMode === "grid" && (
-                    <img
-                      src={getLowResPreviewUrl(
-                        image.thumbnail_url || image.url,
-                      )}
-                      alt={image.title || "Wallpaper"}
-                      className="w-full h-auto object-cover transition-transform duration-700 group-hover:scale-105"
-                      loading="lazy"
-                      onError={(e) => handleImageError(e, image.url)}
-                    />
-                  )}
-                  {viewMode === "compact" && (
-                    <div className="flex flex-col md:flex-row w-full">
+                    <div className="aspect-[4/5] w-full overflow-hidden">
                       <img
                         src={getLowResPreviewUrl(
                           image.thumbnail_url || image.url,
                         )}
                         alt={image.title || "Wallpaper"}
-                        className="w-full md:w-2/3 h-48 md:h-auto object-cover transition-transform duration-700 group-hover:scale-105"
+                        className="w-full h-full object-cover transition-transform duration-700 group-hover:scale-105"
                         loading="lazy"
                         onError={(e) => handleImageError(e, image.url)}
                       />
-                      <div className="p-4 flex flex-col justify-center flex-1">
-                        <p className="text-white font-medium">{image.title}</p>
+                    </div>
+                  )}
+
+                  {/* COMPACT VIEW */}
+                  {viewMode === "compact" && (
+                    <div className="flex flex-col h-full">
+                      <div className="aspect-video w-full overflow-hidden border-b border-zinc-800/50">
+                        <img
+                          src={getLowResPreviewUrl(
+                            image.thumbnail_url || image.url,
+                          )}
+                          alt={image.title || "Wallpaper"}
+                          className="w-full h-full object-cover transition-transform duration-700 group-hover:scale-105"
+                          loading="lazy"
+                          onError={(e) => handleImageError(e, image.url)}
+                        />
+                      </div>
+                      <div className="p-4 flex flex-col flex-1 bg-zinc-900/50">
+                        <p className="text-white font-medium truncate">
+                          {image.title || "Untitled Asset"}
+                        </p>
                         <div className="flex gap-2 mt-2">
-                          <span className="text-xs text-zinc-300 bg-white/10 backdrop-blur-md px-2 py-1 rounded">
+                          <span className="text-[10px] font-bold tracking-wider uppercase text-blue-400 bg-blue-400/10 px-2 py-1 rounded-md">
                             HD
                           </span>
-                          <span className="text-xs text-zinc-300 bg-white/10 backdrop-blur-md px-2 py-1 rounded">
+                          <span className="text-[10px] font-bold tracking-wider uppercase text-zinc-400 bg-zinc-800 px-2 py-1 rounded-md">
                             Raw
                           </span>
                         </div>
                       </div>
                     </div>
                   )}
+
+                  {/* LIST VIEW */}
                   {viewMode === "list" && (
-                    <div className="flex flex-col md:flex-row w-full p-4 items-center gap-6">
-                      <img
-                        src={getLowResPreviewUrl(
-                          image.thumbnail_url || image.url,
-                        )}
-                        alt={image.title || "Wallpaper"}
-                        className="w-full md:w-1/4 h-32 object-cover rounded-xl transition-transform duration-700 group-hover:scale-105"
-                        loading="lazy"
-                        onError={(e) => handleImageError(e, image.url)}
-                      />
-                      <div className="flex-1">
-                        <h3 className="text-xl font-bold">{image.title}</h3>
-                        <p className="text-zinc-400 text-sm">
+                    <>
+                      <div className="w-full sm:w-48 aspect-video overflow-hidden rounded-xl shrink-0">
+                        <img
+                          src={getLowResPreviewUrl(
+                            image.thumbnail_url || image.url,
+                          )}
+                          alt={image.title || "Wallpaper"}
+                          className="w-full h-full object-cover transition-transform duration-700 group-hover:scale-105"
+                          loading="lazy"
+                          onError={(e) => handleImageError(e, image.url)}
+                        />
+                      </div>
+                      <div className="flex-1 min-w-0 w-full sm:w-auto text-center sm:text-left">
+                        <h3 className="text-lg font-bold text-white truncate">
+                          {image.title || "Untitled Asset"}
+                        </h3>
+                        <p className="text-zinc-500 text-sm mt-1">
                           High definition wallpaper asset
                         </p>
                       </div>
-                      <div className="flex gap-3">
+                      <div className="flex gap-2 w-full sm:w-auto justify-center sm:justify-end">
                         <button
                           onClick={(e) => {
                             e.stopPropagation();
                             handleDownload(image);
                           }}
-                          className="text-zinc-400 hover:text-white p-2 rounded-lg bg-zinc-800/50 hover:bg-zinc-800 transition-colors"
+                          className="text-zinc-400 hover:text-white p-3 rounded-xl bg-zinc-800/50 hover:bg-zinc-700 transition-colors"
                           title="Download Original Quality"
                         >
                           <Download className="w-5 h-5" />
                         </button>
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            handleDelete(image.id);
+                          }}
+                          className="text-zinc-400 hover:text-red-500 p-3 rounded-xl bg-zinc-800/50 hover:bg-red-500/10 transition-colors"
+                          title="Delete"
+                        >
+                          <Trash2 className="w-5 h-5" />
+                        </button>
                       </div>
-                    </div>
+                    </>
                   )}
 
-                  {/* Hover Overlay for Grid & Compact */}
+                  {/* HOVER OVERLAY (Grid & Compact only) */}
                   {viewMode !== "list" && (
-                    <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-transparent to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300 flex flex-col justify-end p-6">
-                      <div className="flex justify-between items-center">
-                        <div>
-                          <p className="text-white font-medium">
-                            {image.title}
+                    <div className="absolute inset-0 bg-gradient-to-t from-black/90 via-black/20 to-transparent opacity-0 group-hover:opacity-100 transition-all duration-300 flex flex-col justify-end p-5">
+                      <div className="flex justify-between items-end translate-y-4 group-hover:translate-y-0 transition-transform duration-300">
+                        <div className="min-w-0 flex-1 pr-4">
+                          <p className="text-white font-medium truncate mb-2">
+                            {image.title || "Untitled"}
                           </p>
-                          <div className="flex gap-2 mt-1">
-                            <span className="text-xs text-zinc-300 bg-white/10 backdrop-blur-md px-2 py-1 rounded">
+                          <div className="flex gap-2">
+                            <span className="text-[10px] font-bold tracking-wider uppercase text-blue-400 bg-blue-400/20 backdrop-blur-md px-2 py-1 rounded-md">
                               HD
-                            </span>
-                            <span className="text-xs text-zinc-300 bg-white/10 backdrop-blur-md px-2 py-1 rounded">
-                              Raw
                             </span>
                           </div>
                         </div>
-                        <div className="flex items-center gap-2">
+                        <div className="flex items-center gap-2 shrink-0">
                           <button
                             onClick={(e) => {
                               e.stopPropagation();
                               handleDownload(image);
                             }}
-                            className="bg-white/20 hover:bg-white text-white hover:text-black p-2 rounded-full transition-colors"
-                            title="Download Original Quality"
+                            className="bg-white/10 hover:bg-white text-white hover:text-black p-2.5 rounded-full backdrop-blur-md transition-colors"
                           >
-                            <Download className="w-5 h-5" />
+                            <Download className="w-4 h-4" />
                           </button>
                           <button
                             onClick={(e) => {
                               e.stopPropagation();
                               handleDelete(image.id);
                             }}
-                            className="bg-red-500/20 hover:bg-red-500 text-red-500 hover:text-white p-2 rounded-full transition-colors"
-                            title="Delete Asset"
+                            className="bg-red-500/20 hover:bg-red-500 text-red-500 hover:text-white p-2.5 rounded-full backdrop-blur-md transition-colors"
                           >
-                            <Trash2 className="w-5 h-5" />
+                            <Trash2 className="w-4 h-4" />
                           </button>
                         </div>
                       </div>
@@ -477,7 +476,7 @@ const App = () => {
         )}
       </main>
 
-      {/* Lightbox Overlay */}
+      {/* Lightbox Overlay (Unchanged from original structure, just minor styling tweaks) */}
       <AnimatePresence>
         {selectedImage && (
           <motion.div
@@ -488,13 +487,13 @@ const App = () => {
             onClick={() => setSelectedImage(null)}
           >
             <motion.div
-              initial={{ scale: 0.9, opacity: 0 }}
-              animate={{ scale: 1, opacity: 1 }}
-              exit={{ scale: 0.9, opacity: 0 }}
+              initial={{ scale: 0.95, opacity: 0, y: 20 }}
+              animate={{ scale: 1, opacity: 1, y: 0 }}
+              exit={{ scale: 0.95, opacity: 0, y: 20 }}
               className="max-w-6xl w-full flex flex-col items-center"
               onClick={(e) => e.stopPropagation()}
             >
-              <div className="relative w-full h-full flex items-center justify-center">
+              <div className="relative w-full flex items-center justify-center">
                 <img
                   src={getOriginalQualityUrl(
                     selectedImage.original_url ||
@@ -503,43 +502,46 @@ const App = () => {
                       selectedImage.thumbnail_url,
                   )}
                   alt={selectedImage.title}
-                  className="max-h-[85vh] w-full object-contain rounded-xl shadow-2xl"
+                  className="max-h-[75vh] w-auto object-contain rounded-xl shadow-2xl ring-1 ring-white/10"
                   onError={(e) =>
                     handleImageError(e, selectedImage.thumbnail_url)
                   }
                 />
                 <button
-                  className="absolute top-4 right-4 text-white/70 hover:text-white transition-colors p-2"
+                  className="absolute -top-12 right-0 md:top-0 md:-right-16 text-zinc-500 hover:text-white bg-zinc-900 md:bg-transparent p-2 rounded-full transition-colors"
                   onClick={() => setSelectedImage(null)}
                 >
-                  <X className="w-10 h-10" />
+                  <X className="w-8 h-8" />
                 </button>
               </div>
 
-              <div className="mt-8 flex flex-col items-center gap-6">
-                <div className="text-center">
-                  <h2 className="text-3xl md:text-5xl font-bold text-white mb-2">
-                    {selectedImage.title}
+              <div className="mt-8 flex flex-col items-center gap-6 w-full max-w-2xl text-center">
+                <div>
+                  <h2 className="text-2xl md:text-4xl font-bold text-white mb-2">
+                    {selectedImage.title || "Untitled Asset"}
                   </h2>
-                  <p className="text-zinc-400">
+                  <p className="text-zinc-400 text-sm">
                     Full Uncompressed Resolution Gallery Asset
                   </p>
                 </div>
 
-                <div className="flex gap-4">
+                <div className="flex flex-wrap justify-center gap-4 w-full">
                   <button
                     onClick={() => handleDownload(selectedImage)}
-                    className="flex items-center gap-3 bg-white text-black hover:bg-zinc-200 px-10 py-4 rounded-full font-bold transition-all duration-200 transform hover:scale-105 active:scale-95 shadow-[0_0_20px_rgba(255,255,255,0.1)]"
+                    className="flex-1 md:flex-none flex justify-center items-center gap-2 bg-white text-black hover:bg-zinc-200 px-8 py-3.5 rounded-full font-semibold transition-all duration-200 active:scale-95 shadow-[0_0_20px_rgba(255,255,255,0.1)]"
                   >
                     <Download className="w-5 h-5" />
-                    Download Full Original Quality
+                    Download Original
                   </button>
                   <button
-                    onClick={() => handleDelete(selectedImage.id)}
-                    className="flex items-center gap-3 bg-red-600 text-white hover:bg-red-700 px-10 py-4 rounded-full font-bold transition-all duration-200 transform hover:scale-105 active:scale-95 shadow-[0_0_20px_rgba(220,38,38,0.2)]"
+                    onClick={() => {
+                      handleDelete(selectedImage.id);
+                      setSelectedImage(null);
+                    }}
+                    className="flex-none flex justify-center items-center gap-2 bg-zinc-900 text-red-500 hover:bg-red-500 hover:text-white border border-red-500/20 px-8 py-3.5 rounded-full font-semibold transition-all duration-200 active:scale-95"
                   >
                     <Trash2 className="w-5 h-5" />
-                    Delete Asset
+                    Delete
                   </button>
                 </div>
               </div>
@@ -548,13 +550,15 @@ const App = () => {
         )}
       </AnimatePresence>
 
-      <footer className="border-t border-zinc-900 py-12 bg-[#09090b]">
-        <div className="max-w-7xl mx-auto px-8 flex flex-col md:flex-row justify-between items-center gap-8">
+      <footer className="border-t border-zinc-800/50 py-8 bg-[#09090b]">
+        <div className="max-w-7xl mx-auto px-6 flex flex-col md:flex-row justify-between items-center gap-6">
           <div className="flex items-center gap-2">
-            <div className="w-6 h-6 bg-zinc-800 rounded flex items-center justify-center">
-              <span className="text-xs font-bold">D</span>
+            <div className="w-6 h-6 bg-blue-600 rounded flex items-center justify-center">
+              <span className="text-xs font-bold text-white">D</span>
             </div>
-            <span className="font-bold">Duffer Wallpapers</span>
+            <span className="font-bold text-sm text-white">
+              Duffer Wallpapers
+            </span>
           </div>
           <p className="text-zinc-500 text-sm">
             © 2026 Duffer Wallpapers. All rights reserved.
@@ -562,13 +566,13 @@ const App = () => {
           <div className="flex gap-6">
             <a
               href="#"
-              className="text-zinc-500 hover:text-white transition-colors"
+              className="text-zinc-500 text-sm hover:text-white transition-colors"
             >
               Twitter
             </a>
             <a
               href="#"
-              className="text-zinc-500 hover:text-white transition-colors"
+              className="text-zinc-500 text-sm hover:text-white transition-colors"
             >
               Instagram
             </a>
