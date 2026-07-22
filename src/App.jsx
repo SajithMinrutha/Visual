@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Download, Image as ImageIcon, Loader2, Menu, X } from 'lucide-react';
+import { Download, Image as ImageIcon, Loader2, Menu, X, Trash2, LayoutGrid, List, Shrink } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import toast, { Toaster } from 'react-hot-toast';
 import { supabase } from './utils/supabase';
@@ -9,6 +9,7 @@ const App = () => {
   const [isLoading, setIsLoading] = useState(true);
   const [selectedImage, setSelectedImage] = useState(null);
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
+  const [viewMode, setViewMode] = useState('grid'); // 'grid', 'compact', 'list'
 
   useEffect(() => {
     const fetchImages = async () => {
@@ -35,6 +36,25 @@ const App = () => {
     fetchImages();
   }, []);
 
+  const handleDelete = async (id) => {
+    if (!window.confirm('Are you sure you want to delete this image?')) return;
+    
+    try {
+      const { error } = await supabase
+        .from('images')
+        .delete()
+        .eq('id', id);
+
+      if (error) throw error;
+      
+      setImages(prev => prev.filter(img => img.id !== id));
+      toast.success('Image deleted successfully');
+    } catch (error) {
+      console.error('Error deleting image:', error);
+      toast.error('Failed to delete image');
+    }
+  };
+
   const handleDownload = async (url) => {
     try {
       const response = await fetch(url);
@@ -43,7 +63,7 @@ const App = () => {
       const blobUrl = window.URL.createObjectURL(blob);
       const link = document.createElement('a');
       link.href = blobUrl;
-      link.download = `photo_${Date.now()}.jpg`;
+      link.download = `wallpaper_${Date.now()}.jpg`;
       document.body.appendChild(link);
       link.click();
       document.body.removeChild(link);
@@ -65,9 +85,9 @@ const App = () => {
           <div className="flex items-center justify-between h-16">
             <div className="flex items-center gap-2">
               <div className="w-8 h-8 bg-blue-600 rounded-lg flex items-center justify-center">
-                <span className="font-bold text-white">L</span>
+                <span className="font-bold text-white">D</span>
               </div>
-              <span className="text-xl font-bold tracking-tight">LensStudio</span>
+              <span className="text-xl font-bold tracking-tight">Duffer Wallpapers</span>
             </div>
             
             <div className="hidden md:flex items-center gap-8">
@@ -110,7 +130,7 @@ const App = () => {
             animate={{ opacity: 1, y: 0 }}
             className="text-5xl md:text-7xl font-black mb-6 bg-clip-text text-transparent bg-gradient-to-b from-white to-zinc-500"
           >
-            Capture the Essence
+            Premium Wallpapers
           </motion.h1>
           <motion.p 
             initial={{ opacity: 0, y: 20 }}
@@ -118,19 +138,46 @@ const App = () => {
             transition={{ delay: 0.1 }}
             className="text-zinc-400 text-lg md:text-xl max-w-2xl mx-auto"
           >
-            Explore our curated collection of high-definition photography, capturing moments from around the globe in stunning detail.
+            Explore our curated collection of high-definition wallpapers, capturing moments from around the globe in stunning detail.
           </motion.p>
         </div>
       </header>
 
       <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pb-24">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between mb-8 gap-4">
+          <div className="flex items-center gap-4 bg-zinc-900 p-1 rounded-xl border border-zinc-800">
+            <button 
+              onClick={() => setViewMode('grid')}
+              className={`p-2 rounded-lg transition-all ${viewMode === 'grid' ? 'bg-blue-600 text-white' : 'text-zinc-500 hover:text-white'}`}
+              title="Grid View"
+            >
+              <LayoutGrid className="w-5 h-5" />
+            </button>
+            <button 
+              onClick={() => setViewMode('compact')}
+              className={`p-2 rounded-lg transition-all ${viewMode === 'compact' ? 'bg-blue-600 text-white' : 'text-zinc-500 hover:text-white'}`}
+              title="Compact View"
+            >
+              <Shrink className="w-5 h-5" />
+            </button>
+            <button 
+              onClick={() => setViewMode('list')}
+              className={`p-2 rounded-lg transition-all ${viewMode === 'list' ? 'bg-blue-600 text-white' : 'text-zinc-500 hover:text-white'}`}
+              title="List View"
+            >
+              <List className="w-5 h-5" />
+            </button>
+          </div>
+          <p className="text-zinc-500 text-sm">Showing {images.length} items</p>
+        </div>
+
         {isLoading ? (
           <div className="flex flex-col items-center justify-center h-96">
             <Loader2 className="w-12 h-12 animate-spin text-blue-500 mb-4" />
             <p className="text-zinc-500">Curating your experience...</p>
           </div>
         ) : (
-          <div className="masonry">
+          <div className="grid gap-6">
             {images.length === 0 ? (
               <div className="text-center py-40">
                 <div className="bg-zinc-900 p-12 rounded-3xl border border-zinc-800 max-w-md mx-auto">
@@ -143,20 +190,75 @@ const App = () => {
                 <motion.div
                   key={image.id}
                   layoutId={`image-${image.id}`}
-                  className="masonry-item relative group cursor-pointer overflow-hidden rounded-3xl bg-zinc-900 border border-zinc-800/50"
+                  className={`relative group overflow-hidden rounded-3xl bg-zinc-900 border border-zinc-800/50 ${
+                    viewMode === 'grid' ? 'col-span-1' : 
+                    viewMode === 'compact' ? 'col-span-1 md:col-span-2' : 
+                    'col-span-full flex flex-col md:flex-row'
+                  }`}
                   onClick={() => setSelectedImage(image)}
                 >
-                  <img
-                    src={image.thumbnail_url}
-                    alt={image.title}
-                    className="w-full h-auto object-cover transition-transform duration-700 group-hover:scale-105"
-                    loading="lazy"
-                  />
+                  {viewMode === 'grid' && (
+                    <img
+                      src={image.thumbnail_url}
+                      alt={image.title}
+                      className="w-full h-auto object-cover transition-transform duration-700 group-hover:scale-105"
+                      loading="lazy"
+                    />
+                  )}
+                  {viewMode === 'compact' && (
+                    <div className="flex flex-col md:flex-row w-full">
+                      <img
+                        src={image.thumbnail_url}
+                        alt={image.title}
+                        className="w-full md:w-2/3 h-48 md:h-auto object-cover transition-transform duration-700 group-hover:scale-105"
+                        loading="lazy"
+                      />
+                      <div className="p-4 flex flex-col justify-center flex-1">
+                        <p className="text-white font-medium">{image.title}</p>
+                        <div className="flex gap-2 mt-2">
+                          <span className="text-xs text-zinc-300 bg-white/10 backdrop-blur-md px-2 py-1 rounded">HD</span>
+                          <span className="text-xs text-zinc-300 bg-white/10 backdrop-blur-md px-2 py-1 rounded">Raw</span>
+                        </div>
+                      </div>
+                    </div>
+                  )}
+                  {viewMode === 'list' && (
+                    <div className="flex flex-col md:flex-row w-full p-4 items-center gap-6">
+                      <img
+                        src={image.thumbnail_url}
+                        alt={image.title}
+                        className="w-full md:w-1/4 h-32 object-cover rounded-xl transition-transform duration-700 group-hover:scale-105"
+                        loading="lazy"
+                      />
+                      <div className="flex-1">
+                        <h3 className="text-xl font-bold">{image.title}</h3>
+                        <p className="text-zinc-400 text-sm">High definition wallpaper asset</p>
+                      </div>
+                      <div className="flex gap-4">
+                        <button className="text-zinc-500 hover:text-white"><ImageIcon className="w-6 h-6" /></button>
+                        <button className="text-zinc-500 hover:text-white"><Download className="w-6 h-6" /></button>
+                      </div>
+                    </div>
+                  )}
+                  
                   <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-transparent to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300 flex flex-col justify-end p-6">
-                    <p className="text-white font-medium">{image.title}</p>
-                    <div className="flex gap-2 mt-2">
-                      <span className="text-xs text-zinc-300 bg-white/10 backdrop-blur-md px-2 py-1 rounded">HD</span>
-                      <span className="text-xs text-zinc-300 bg-white/10 backdrop-blur-md px-2 py-1 rounded">Raw</span>
+                    <div className="flex justify-between items-center">
+                      <div>
+                        <p className="text-white font-medium">{image.title}</p>
+                        <div className="flex gap-2 mt-1">
+                          <span className="text-xs text-zinc-300 bg-white/10 backdrop-blur-md px-2 py-1 rounded">HD</span>
+                          <span className="text-xs text-zinc-300 bg-white/10 backdrop-blur-md px-2 py-1 rounded">Raw</span>
+                        </div>
+                      </div>
+                      <button 
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          handleDelete(image.id);
+                        }}
+                        className="bg-red-500/20 hover:bg-red-500 text-red-500 hover:text-white p-2 rounded-full transition-colors"
+                      >
+                        <Trash2 className="w-5 h-5" />
+                      </button>
                     </div>
                   </div>
                 </motion.div>
@@ -211,6 +313,13 @@ const App = () => {
                     <Download className="w-5 h-5" />
                     Download Full Resolution
                   </button>
+                  <button 
+                    onClick={() => handleDelete(selectedImage.id)}
+                    className="flex items-center gap-3 bg-red-600 text-white hover:bg-red-700 px-10 py-4 rounded-full font-bold transition-all duration-200 transform hover:scale-105 active:scale-95 shadow-[0_0_20px_rgba(220,38,38,0.2)]"
+                  >
+                    <Trash2 className="w-5 h-5" />
+                    Delete Asset
+                  </button>
                 </div>
               </div>
             </motion.div>
@@ -222,11 +331,11 @@ const App = () => {
         <div className="max-w-7xl mx-auto px-8 flex flex-col md:flex-row justify-between items-center gap-8">
           <div className="flex items-center gap-2">
             <div className="w-6 h-6 bg-zinc-800 rounded flex items-center justify-center">
-              <span className="text-xs font-bold">L</span>
+              <span className="text-xs font-bold">D</span>
             </div>
-            <span className="font-bold">LensStudio</span>
+            <span className="font-bold">Duffer Wallpapers</span>
           </div>
-          <p className="text-zinc-500 text-sm">© 2026 LensStudio. All rights reserved.</p>
+          <p className="text-zinc-500 text-sm">© 2026 Duffer Wallpapers. All rights reserved.</p>
           <div className="flex gap-6">
             <a href="#" className="text-zinc-500 hover:text-white transition-colors">Twitter</a>
             <a href="#" className="text-zinc-500 hover:text-white transition-colors">Instagram</a>
