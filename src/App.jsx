@@ -1,11 +1,12 @@
 import { AnimatePresence, motion } from "framer-motion";
 import {
+  ChevronDown,
+  ChevronUp,
   Download,
   Image as ImageIcon,
   LayoutGrid,
   List,
   Loader2,
-  Menu,
   Shrink,
   Trash2,
   X,
@@ -20,7 +21,6 @@ const App = () => {
   const [selectedImage, setSelectedImage] = useState(null);
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const [viewMode, setViewMode] = useState("grid"); // 'grid', 'compact', 'list'
-
   useEffect(() => {
     const fetchImages = async () => {
       setIsLoading(true);
@@ -43,6 +43,20 @@ const App = () => {
 
     fetchImages();
   }, []);
+
+  const scrollToTop = () => {
+    window.scrollTo({
+      top: 0,
+      behavior: "smooth",
+    });
+  };
+
+  const scrollToBottom = () => {
+    window.scrollTo({
+      top: document.documentElement.scrollHeight,
+      behavior: "smooth",
+    });
+  };
 
   const handleDelete = async (id) => {
     if (!window.confirm("Are you sure you want to delete this image?")) return;
@@ -180,9 +194,7 @@ const App = () => {
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex items-center justify-between h-16">
             <div className="flex items-center gap-3">
-              <div className="w-8 h-8 bg-blue-600 rounded-lg flex items-center justify-center shadow-lg shadow-blue-500/20">
-                <span className="font-bold text-white text-sm">D</span>
-              </div>
+              <img src="/favicon.svg" alt="Logo" className="w-8 h-8" />
               <span className="text-xl font-bold tracking-tight">
                 Duffer Wallpapers
               </span>
@@ -208,45 +220,8 @@ const App = () => {
                 Contact
               </a>
             </div>
-
-            <div className="md:hidden">
-              <button
-                onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)}
-                className="p-2 text-zinc-400 hover:text-white"
-              >
-                {isMobileMenuOpen ? (
-                  <X className="w-5 h-5" />
-                ) : (
-                  <Menu className="w-5 h-5" />
-                )}
-              </button>
-            </div>
           </div>
         </div>
-
-        {/* Mobile Menu */}
-        <AnimatePresence>
-          {isMobileMenuOpen && (
-            <motion.div
-              initial={{ opacity: 0, height: 0 }}
-              animate={{ opacity: 1, height: "auto" }}
-              exit={{ opacity: 0, height: 0 }}
-              className="md:hidden bg-[#09090b] border-b border-zinc-800/50 overflow-hidden"
-            >
-              <div className="flex flex-col gap-4 p-4">
-                <a href="#" className="text-sm font-medium text-white">
-                  Gallery
-                </a>
-                <a href="#" className="text-sm font-medium text-zinc-400">
-                  About
-                </a>
-                <a href="#" className="text-sm font-medium text-zinc-400">
-                  Contact
-                </a>
-              </div>
-            </motion.div>
-          )}
-        </AnimatePresence>
       </nav>
 
       <header className="pt-32 pb-16 px-4 md:px-8">
@@ -309,7 +284,6 @@ const App = () => {
             </p>
           </div>
         ) : (
-          /* DYNAMIC GRID PARENT */
           <div
             className={`grid gap-6 ${
               viewMode === "grid"
@@ -432,7 +406,7 @@ const App = () => {
                     </>
                   )}
 
-                  {/* HOVER OVERLAY (Grid & Compact only) */}
+                  {/* HOVER OVERLAY */}
                   {viewMode !== "list" && (
                     <div className="absolute inset-0 bg-gradient-to-t from-black/90 via-black/20 to-transparent opacity-0 group-hover:opacity-100 transition-all duration-300 flex flex-col justify-end p-5">
                       <div className="flex justify-between items-end translate-y-4 group-hover:translate-y-0 transition-transform duration-300">
@@ -476,7 +450,25 @@ const App = () => {
         )}
       </main>
 
-      {/* Lightbox Overlay (Unchanged from original structure, just minor styling tweaks) */}
+      {/* Floating Scroll Controls */}
+      <div className="fixed bottom-6 right-6 z-30 flex flex-col gap-2">
+        <button
+          onClick={scrollToTop}
+          className="bg-zinc-900/80 hover:bg-zinc-800 text-zinc-300 hover:text-white p-3 rounded-full border border-zinc-800/80 backdrop-blur-md shadow-lg transition-all active:scale-95"
+          title="Scroll to Top"
+        >
+          <ChevronUp className="w-5 h-5" />
+        </button>
+        <button
+          onClick={scrollToBottom}
+          className="bg-zinc-900/80 hover:bg-zinc-800 text-zinc-300 hover:text-white p-3 rounded-full border border-zinc-800/80 backdrop-blur-md shadow-lg transition-all active:scale-95"
+          title="Scroll to Bottom"
+        >
+          <ChevronDown className="w-5 h-5" />
+        </button>
+      </div>
+
+      {/* Lightbox Overlay */}
       <AnimatePresence>
         {selectedImage && (
           <motion.div
@@ -553,9 +545,7 @@ const App = () => {
       <footer className="border-t border-zinc-800/50 py-8 bg-[#09090b]">
         <div className="max-w-7xl mx-auto px-6 flex flex-col md:flex-row justify-between items-center gap-6">
           <div className="flex items-center gap-2">
-            <div className="w-6 h-6 bg-blue-600 rounded flex items-center justify-center">
-              <span className="text-xs font-bold text-white">D</span>
-            </div>
+            <img src="/favicon.svg" alt="Logo" className="w-8 h-8" />
             <span className="font-bold text-sm text-white">
               Duffer Wallpapers
             </span>
