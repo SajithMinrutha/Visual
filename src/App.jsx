@@ -19,8 +19,9 @@ const App = () => {
   const [images, setImages] = useState([]);
   const [isLoading, setIsLoading] = useState(true);
   const [selectedImage, setSelectedImage] = useState(null);
-  const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const [viewMode, setViewMode] = useState("grid"); // 'grid', 'compact', 'list'
+
+  // Fetch images & set up Realtime auto-update
   useEffect(() => {
     const fetchImages = async () => {
       setIsLoading(true);
@@ -42,13 +43,37 @@ const App = () => {
     };
 
     fetchImages();
+
+    // Supabase Realtime Subscription for automatic updates
+    const channel = supabase
+      .channel("public:images")
+      .on(
+        "postgres_changes",
+        { event: "INSERT", schema: "public", table: "images" },
+        (payload) => {
+          setImages((prevImages) => [payload.new, ...prevImages]);
+          toast.success("New wallpaper added!");
+        },
+      )
+      .on(
+        "postgres_changes",
+        { event: "DELETE", schema: "public", table: "images" },
+        (payload) => {
+          setImages((prevImages) =>
+            prevImages.filter((img) => img.id !== payload.old.id),
+          );
+        },
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
   }, []);
 
+  // Smooth scroll functions
   const scrollToTop = () => {
-    window.scrollTo({
-      top: 0,
-      behavior: "smooth",
-    });
+    window.scrollTo({ top: 0, behavior: "smooth" });
   };
 
   const scrollToBottom = () => {
@@ -58,19 +83,45 @@ const App = () => {
     });
   };
 
-  const handleDelete = async (id) => {
+  // Fixed delete function
+  const handleDelete = async (e, id) => {
+    if (e && e.stopPropagation) {
+      e.stopPropagation();
+    }
+
     if (!window.confirm("Are you sure you want to delete this image?")) return;
+
+    const toastId = toast.loading("Deleting image...");
+
     try {
-      const { error } = await supabase.from("images").delete().eq("id", id);
+      const { error, count } = await supabase
+        .from("images")
+        .delete({ count: "exact" })
+        .eq("id", id);
+
       if (error) throw error;
+
+      if (count === 0) {
+        toast.error("No record was found matching that ID.", { id: toastId });
+        return;
+      }
+
       setImages((prev) => prev.filter((img) => img.id !== id));
-      toast.success("Image deleted successfully");
+
+      if (selectedImage?.id === id) {
+        setSelectedImage(null);
+      }
+
+      toast.success("Image deleted successfully", { id: toastId });
     } catch (error) {
       console.error("Error deleting image:", error);
-      toast.error("Failed to delete image");
+      toast.error(`Delete failed: ${error.message || "Unknown error"}`, {
+        id: toastId,
+      });
     }
   };
 
+  // Convert raw URLs into lightweight 450px preview images
   const getLowResPreviewUrl = (rawUrl) => {
     if (!rawUrl) return "";
     let url = rawUrl;
@@ -99,6 +150,7 @@ const App = () => {
     }
   };
 
+  // Get full resolution asset (used strictly in Lightbox & Downloads)
   const getOriginalQualityUrl = (rawUrl) => {
     if (!rawUrl) return "";
     let url = rawUrl;
@@ -179,9 +231,11 @@ const App = () => {
     }
   };
 
+  // Fallback handler that ensures we stay on low-resolution previews on the grid
   const handleImageError = (e, fallbackUrl) => {
-    if (fallbackUrl && e.target.src !== fallbackUrl) {
-      e.target.src = fallbackUrl;
+    const lowResFallback = getLowResPreviewUrl(fallbackUrl);
+    if (fallbackUrl && e.target.src !== lowResFallback) {
+      e.target.src = lowResFallback;
     }
   };
 
@@ -251,21 +305,33 @@ const App = () => {
           <div className="flex items-center gap-1 bg-zinc-900/50 p-1 rounded-xl border border-zinc-800/50 w-fit">
             <button
               onClick={() => setViewMode("grid")}
-              className={`p-2.5 rounded-lg transition-all ${viewMode === "grid" ? "bg-zinc-800 text-white shadow-sm" : "text-zinc-500 hover:text-white"}`}
+              className={`p-2.5 rounded-lg transition-all ${
+                viewMode === "grid"
+                  ? "bg-zinc-800 text-white shadow-sm"
+                  : "text-zinc-500 hover:text-white"
+              }`}
               title="Grid View"
             >
               <LayoutGrid className="w-4 h-4" />
             </button>
             <button
               onClick={() => setViewMode("compact")}
-              className={`p-2.5 rounded-lg transition-all ${viewMode === "compact" ? "bg-zinc-800 text-white shadow-sm" : "text-zinc-500 hover:text-white"}`}
+              className={`p-2.5 rounded-lg transition-all ${
+                viewMode === "compact"
+                  ? "bg-zinc-800 text-white shadow-sm"
+                  : "text-zinc-500 hover:text-white"
+              }`}
               title="Compact View"
             >
               <Shrink className="w-4 h-4" />
             </button>
             <button
               onClick={() => setViewMode("list")}
-              className={`p-2.5 rounded-lg transition-all ${viewMode === "list" ? "bg-zinc-800 text-white shadow-sm" : "text-zinc-500 hover:text-white"}`}
+              className={`p-2.5 rounded-lg transition-all ${
+                viewMode === "list"
+                  ? "bg-zinc-800 text-white shadow-sm"
+                  : "text-zinc-500 hover:text-white"
+              }`}
               title="List View"
             >
               <List className="w-4 h-4" />
@@ -393,10 +459,7 @@ const App = () => {
                           <Download className="w-5 h-5" />
                         </button>
                         <button
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            handleDelete(image.id);
-                          }}
+                          onClick={(e) => handleDelete(e, image.id)}
                           className="text-zinc-400 hover:text-red-500 p-3 rounded-xl bg-zinc-800/50 hover:bg-red-500/10 transition-colors"
                           title="Delete"
                         >
@@ -406,7 +469,7 @@ const App = () => {
                     </>
                   )}
 
-                  {/* HOVER OVERLAY */}
+                  {/* HOVER OVERLAY (Grid & Compact) */}
                   {viewMode !== "list" && (
                     <div className="absolute inset-0 bg-gradient-to-t from-black/90 via-black/20 to-transparent opacity-0 group-hover:opacity-100 transition-all duration-300 flex flex-col justify-end p-5">
                       <div className="flex justify-between items-end translate-y-4 group-hover:translate-y-0 transition-transform duration-300">
@@ -431,10 +494,7 @@ const App = () => {
                             <Download className="w-4 h-4" />
                           </button>
                           <button
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              handleDelete(image.id);
-                            }}
+                            onClick={(e) => handleDelete(e, image.id)}
                             className="bg-red-500/20 hover:bg-red-500 text-red-500 hover:text-white p-2.5 rounded-full backdrop-blur-md transition-colors"
                           >
                             <Trash2 className="w-4 h-4" />
@@ -468,7 +528,7 @@ const App = () => {
         </button>
       </div>
 
-      {/* Lightbox Overlay */}
+      {/* Lightbox Overlay (Only here does full original quality load) */}
       <AnimatePresence>
         {selectedImage && (
           <motion.div
@@ -526,10 +586,7 @@ const App = () => {
                     Download Original
                   </button>
                   <button
-                    onClick={() => {
-                      handleDelete(selectedImage.id);
-                      setSelectedImage(null);
-                    }}
+                    onClick={(e) => handleDelete(e, selectedImage.id)}
                     className="flex-none flex justify-center items-center gap-2 bg-zinc-900 text-red-500 hover:bg-red-500 hover:text-white border border-red-500/20 px-8 py-3.5 rounded-full font-semibold transition-all duration-200 active:scale-95"
                   >
                     <Trash2 className="w-5 h-5" />
