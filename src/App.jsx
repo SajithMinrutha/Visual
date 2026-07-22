@@ -93,7 +93,7 @@ const App = () => {
                   </div>
                 </motion.div>
               ))
-            }
+            )}
           </div>
         )}
       </main>
