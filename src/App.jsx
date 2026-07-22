@@ -62,55 +62,78 @@ const App = () => {
     }
   };
 
-  // High-Resolution Download Handler
+  /**
+   * Converts CDN preview & thumbnail URLs to uncompressed, raw original files
+   */
+  const getOriginalQualityUrl = (rawUrl) => {
+    if (!rawUrl) return "";
+    let url = rawUrl;
+
+    // 1. Zedge CDN: Remove path-based crop boundaries (/crop/10/250/250/0/ -> /image/)
+    url = url.replace(/\/crop\/\d+\/\d+\/\d+\/\d+\//i, "/image/");
+    url = url.replace(/\/crop\/\d+\/\d+\//i, "/image/");
+
+    // 2. Supabase Storage: Bypass image optimization worker, fetch raw object
+    url = url.replace(
+      "/storage/v1/render/image/public/",
+      "/storage/v1/object/public/",
+    );
+
+    // 3. Cloudinary: Remove scaling / downsampling parameters
+    url = url
+      .replace(/\/c_scale,[^/]+\//i, "/")
+      .replace(/\/w_\d+[^/]*\//i, "/");
+
+    // 4. Strip CDN URL Query Parameters (Unsplash, Imgix, etc.)
+    try {
+      const urlObj = new URL(url);
+      const paramsToClear = [
+        "w",
+        "h",
+        "width",
+        "height",
+        "quality",
+        "q",
+        "fit",
+        "crop",
+        "resize",
+        "auto",
+        "dpr",
+      ];
+      paramsToClear.forEach((param) => urlObj.searchParams.delete(param));
+      return urlObj.toString();
+    } catch {
+      return url;
+    }
+  };
+
+  // High-Resolution Download Engine
   const handleDownload = async (image) => {
     if (!image) return;
 
-    // 1. Prioritize full resolution / HD URLs over preview thumbnails
-    const targetUrl =
+    const rawTargetUrl =
       image.original_url ||
       image.hd_url ||
       image.full_url ||
       image.url ||
       image.thumbnail_url;
-
-    if (!targetUrl) {
+    if (!rawTargetUrl) {
       toast.error("Download URL not found");
       return;
     }
 
-    const toastId = toast.loading("Downloading highest quality asset...");
+    const toastId = toast.loading("Extracting uncompressed original file...");
 
     try {
-      // 2. Strip CDN quality/resizing query parameters to fetch raw original file
-      let cleanUrl = targetUrl;
-      try {
-        const urlObj = new URL(targetUrl);
-        // Remove common CDN downscaling parameters
-        const paramsToRemove = [
-          "w",
-          "h",
-          "width",
-          "height",
-          "quality",
-          "q",
-          "fit",
-          "crop",
-          "resize",
-        ];
-        paramsToRemove.forEach((p) => urlObj.searchParams.delete(p));
-        cleanUrl = urlObj.toString();
-      } catch (e) {
-        // Fallback if URL parsing fails
-        cleanUrl = targetUrl;
-      }
+      // Get uncompressed CDN source URL
+      const highResUrl = getOriginalQualityUrl(rawTargetUrl);
 
-      // 3. Fetch image as blob
-      let response = await fetch(cleanUrl);
+      // Fetch with cache bypass to prevent getting browser's scaled preview cache
+      let response = await fetch(highResUrl, { cache: "reload" });
 
-      // If cleaned URL fails, fallback to original target URL
+      // Fallback if transformed URL isn't directly reachable
       if (!response.ok) {
-        response = await fetch(targetUrl);
+        response = await fetch(rawTargetUrl, { cache: "reload" });
       }
 
       if (!response.ok)
@@ -119,7 +142,6 @@ const App = () => {
       const blob = await response.blob();
       const blobUrl = window.URL.createObjectURL(blob);
 
-      // 4. Create clean download filename
       const cleanTitle = image.title
         ? image.title.toLowerCase().replace(/[^a-z0-9]/g, "_")
         : "wallpaper";
@@ -138,11 +160,9 @@ const App = () => {
       });
     } catch (error) {
       console.error("Download failed:", error);
-      // Fallback: Open full resolution image in a new tab for direct download
-      window.open(targetUrl, "_blank");
-      toast.success("Opened original high-res image in new tab", {
-        id: toastId,
-      });
+      // Fallback: Open full resolution image directly in new tab
+      window.open(getOriginalQualityUrl(rawTargetUrl), "_blank");
+      toast.success("Opened original asset in new tab", { id: toastId });
     }
   };
 
@@ -432,12 +452,12 @@ const App = () => {
             >
               <div className="relative w-full h-full flex items-center justify-center">
                 <img
-                  src={
+                  src={getOriginalQualityUrl(
                     selectedImage.original_url ||
-                    selectedImage.hd_url ||
-                    selectedImage.url ||
-                    selectedImage.thumbnail_url
-                  }
+                      selectedImage.hd_url ||
+                      selectedImage.url ||
+                      selectedImage.thumbnail_url,
+                  )}
                   alt={selectedImage.title}
                   className="max-h-[85vh] w-full object-contain rounded-xl shadow-2xl"
                   onError={(e) =>
