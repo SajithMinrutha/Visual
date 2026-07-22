@@ -8,7 +8,6 @@ import {
   List,
   Loader2,
   Shrink,
-  Trash2,
   X,
 } from "lucide-react";
 import { useEffect, useState } from "react";
@@ -256,8 +255,12 @@ const App = () => {
 
             <div className="hidden md:flex items-center gap-8">
               <a
-                href="#"
-                className="text-sm font-medium text-white hover:text-blue-400 transition-colors"
+                href="#top"
+                onClick={(e) => {
+                  e.preventDefault();
+                  scrollToTop();
+                }}
+                className="text-sm font-medium text-white hover:text-blue-400 transition-colors cursor-pointer"
               >
                 Gallery
               </a>
@@ -481,12 +484,12 @@ const App = () => {
                           >
                             <Download className="w-4 h-4" />
                           </button>
-                          <button
+                          {/* <button
                             onClick={(e) => handleDelete(e, image.id)}
                             className="bg-red-500/20 hover:bg-red-500 text-red-500 hover:text-white p-2.5 rounded-full backdrop-blur-md transition-colors"
                           >
                             <Trash2 className="w-4 h-4" />
-                          </button>
+                          </button> */}
                         </div>
                       </div>
                     </div>
@@ -573,13 +576,13 @@ const App = () => {
                     <Download className="w-5 h-5" />
                     Download Original
                   </button>
-                  <button
+                  {/* <button
                     onClick={(e) => handleDelete(e, selectedImage.id)}
                     className="flex-none flex justify-center items-center gap-2 bg-zinc-900 text-red-500 hover:bg-red-500 hover:text-white border border-red-500/20 px-8 py-3.5 rounded-full font-semibold transition-all duration-200 active:scale-95"
                   >
                     <Trash2 className="w-5 h-5" />
                     Delete
-                  </button>
+                  </button> */}
                 </div>
               </div>
             </motion.div>
