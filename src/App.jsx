@@ -24,7 +24,7 @@ const App = () => {
   // Pagination states
   const [page, setPage] = useState(0);
   const [hasMore, setHasMore] = useState(true);
-  const ITEMS_PER_PAGE = 50;
+  const ITEMS_PER_PAGE = 1000;
 
   // Fetch images with pagination
   const fetchImages = async (pageIndex = 0, isInitialLoad = false) => {
