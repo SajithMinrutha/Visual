@@ -21,34 +21,51 @@ const App = () => {
   const [selectedImage, setSelectedImage] = useState(null);
   const [viewMode, setViewMode] = useState("grid"); // 'grid', 'compact', 'list'
 
-  // Fetch images & set up Realtime auto-update
-  useEffect(() => {
-    const fetchImages = async () => {
-      setIsLoading(true);
-      try {
-        const { data, error } = await supabase
-          .from("images")
-          .select("*")
-          .order("created_at", { ascending: false, nullsFirst: false })
-          .order("id", { ascending: false });
+  // Pagination states
+  const [page, setPage] = useState(0);
+  const [hasMore, setHasMore] = useState(true);
+  const ITEMS_PER_PAGE = 50;
 
-        if (error) throw error;
-        if (data) {
-          // Deduplicate initial fetched records by ID
-          const uniqueData = Array.from(
-            new Map(data.map((item) => [item.id, item])).values(),
-          );
-          setImages(uniqueData);
+  // Fetch images with pagination
+  const fetchImages = async (pageIndex = 0, isInitialLoad = false) => {
+    if (isInitialLoad) setIsLoading(true);
+    
+    try {
+      const from = pageIndex * ITEMS_PER_PAGE;
+      const to = from + ITEMS_PER_PAGE - 1;
+
+      const { data, error } = await supabase
+        .from("images")
+        .select("*")
+        .order("created_at", { ascending: false, nullsFirst: false })
+        .order("id", { ascending: false })
+        .range(from, to);
+
+      if (error) throw error;
+      
+      if (data) {
+        // If we received fewer items than requested, we've hit the end
+        if (data.length < ITEMS_PER_PAGE) {
+          setHasMore(false);
         }
-      } catch (error) {
-        console.error("Error fetching images:", error);
-        toast.error("Failed to load gallery");
-      } finally {
-        setIsLoading(false);
-      }
-    };
 
-    fetchImages();
+        setImages(prev => {
+          const newData = isInitialLoad ? data : [...prev, ...data];
+          // Deduplicate by ID
+          return Array.from(new Map(newData.map((item) => [item.id, item])).values());
+        });
+      }
+    } catch (error) {
+      console.error("Error fetching images:", error);
+      toast.error("Failed to load gallery");
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  // Fetch initial images & set up Realtime auto-update
+  useEffect(() => {
+    fetchImages(0, true);
 
     // Supabase Realtime Subscription for automatic updates
     const channel = supabase
@@ -346,7 +363,7 @@ const App = () => {
           </p>
         </div>
 
-        {isLoading ? (
+        {isLoading && page === 0 ? (
           <div className="flex flex-col items-center justify-center h-96">
             <Loader2 className="w-8 h-8 animate-spin text-blue-500 mb-4" />
             <p className="text-zinc-500 text-sm font-medium">
@@ -354,55 +371,40 @@ const App = () => {
             </p>
           </div>
         ) : (
-          <div
-            className={`grid gap-6 ${
-              viewMode === "grid"
-                ? "grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4"
-                : viewMode === "compact"
+          <>
+            <div
+              className={`grid gap-6 ${
+                viewMode === "grid"
+                  ? "grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4"
+                  : viewMode === "compact"
                   ? "grid-cols-1 md:grid-cols-2 lg:grid-cols-3"
                   : "grid-cols-1 max-w-4xl mx-auto"
-            }`}
-          >
-            {images.length === 0 ? (
-              <div className="col-span-full text-center py-40">
-                <div className="bg-zinc-900/50 p-12 rounded-3xl border border-zinc-800/50 max-w-md mx-auto">
-                  <ImageIcon className="w-12 h-12 text-zinc-700 mx-auto mb-4" />
-                  <p className="text-zinc-400 font-medium">
-                    No images found in the gallery.
-                  </p>
+              }`}
+            >
+              {images.length === 0 ? (
+                <div className="col-span-full text-center py-40">
+                  <div className="bg-zinc-900/50 p-12 rounded-3xl border border-zinc-800/50 max-w-md mx-auto">
+                    <ImageIcon className="w-12 h-12 text-zinc-700 mx-auto mb-4" />
+                    <p className="text-zinc-400 font-medium">
+                      No images found in the gallery.
+                    </p>
+                  </div>
                 </div>
-              </div>
-            ) : (
-              images.map((image) => (
-                <motion.div
-                  key={image.id}
-                  layoutId={`image-${image.id}`}
-                  onClick={() => setSelectedImage(image)}
-                  className={`relative group overflow-hidden rounded-2xl bg-zinc-900 border border-zinc-800/50 cursor-pointer transition-all hover:border-zinc-700 ${
-                    viewMode === "list"
-                      ? "flex flex-col sm:flex-row items-center p-3 gap-6"
-                      : ""
-                  }`}
-                >
-                  {/* GRID VIEW */}
-                  {viewMode === "grid" && (
-                    <div className="aspect-[4/5] w-full overflow-hidden">
-                      <img
-                        src={getLowResPreviewUrl(
-                          image.thumbnail_url || image.url,
-                        )}
-                        alt={image.title || "Wallpaper"}
-                        className="w-full h-full object-cover transition-transform duration-700 group-hover:scale-105"
-                        loading="lazy"
-                        onError={(e) => handleImageError(e, image.url)}
-                      />
-                    </div>
-                  )}
-
-                  {/* COMPACT VIEW */}
-                  {viewMode === "compact" && (
-                    <div className="flex flex-col h-full">
-                      <div className="aspect-video w-full overflow-hidden border-b border-zinc-800/50">
+              ) : (
+                images.map((image) => (
+                  <motion.div
+                    key={image.id}
+                    layoutId={`image-${image.id}`}
+                    onClick={() => setSelectedImage(image)}
+                    className={`relative group overflow-hidden rounded-2xl bg-zinc-900 border border-zinc-800/50 cursor-pointer transition-all hover:border-zinc-700 ${
+                      viewMode === "list"
+                        ? "flex flex-col sm:flex-row items-center p-3 gap-6"
+                        : ""
+                    }`}
+                  >
+                    {/* GRID VIEW */}
+                    {viewMode === "grid" && (
+                      <div className="aspect-[4/5] w-full overflow-hidden">
                         <img
                           src={getLowResPreviewUrl(
                             image.thumbnail_url || image.url,
@@ -413,104 +415,140 @@ const App = () => {
                           onError={(e) => handleImageError(e, image.url)}
                         />
                       </div>
-                      <div className="p-4 flex flex-col flex-1 bg-zinc-900/50">
-                        <p className="text-white font-medium truncate">
-                          {image.title || "Untitled Asset"}
-                        </p>
-                        <div className="flex gap-2 mt-2">
-                          <span className="text-[10px] font-bold tracking-wider uppercase text-blue-400 bg-blue-400/10 px-2 py-1 rounded-md">
-                            HD
-                          </span>
-                          <span className="text-[10px] font-bold tracking-wider uppercase text-zinc-400 bg-zinc-800 px-2 py-1 rounded-md">
-                            Raw
-                          </span>
+                    )}
+
+                    {/* COMPACT VIEW */}
+                    {viewMode === "compact" && (
+                      <div className="flex flex-col h-full">
+                        <div className="aspect-video w-full overflow-hidden border-b border-zinc-800/50">
+                          <img
+                            src={getLowResPreviewUrl(
+                              image.thumbnail_url || image.url,
+                            )}
+                            alt={image.title || "Wallpaper"}
+                            className="w-full h-full object-cover transition-transform duration-700 group-hover:scale-105"
+                            loading="lazy"
+                            onError={(e) => handleImageError(e, image.url)}
+                          />
                         </div>
-                      </div>
-                    </div>
-                  )}
-
-                  {/* LIST VIEW */}
-                  {viewMode === "list" && (
-                    <>
-                      <div className="w-full sm:w-48 aspect-video overflow-hidden rounded-xl shrink-0">
-                        <img
-                          src={getLowResPreviewUrl(
-                            image.thumbnail_url || image.url,
-                          )}
-                          alt={image.title || "Wallpaper"}
-                          className="w-full h-full object-cover transition-transform duration-700 group-hover:scale-105"
-                          loading="lazy"
-                          onError={(e) => handleImageError(e, image.url)}
-                        />
-                      </div>
-                      <div className="flex-1 min-w-0 w-full sm:w-auto text-center sm:text-left">
-                        <h3 className="text-lg font-bold text-white truncate">
-                          {image.title || "Untitled Asset"}
-                        </h3>
-                        <p className="text-zinc-500 text-sm mt-1">
-                          High definition wallpaper asset
-                        </p>
-                      </div>
-                      <div className="flex gap-2 w-full sm:w-auto justify-center sm:justify-end">
-                        <button
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            handleDownload(image);
-                          }}
-                          className="text-zinc-400 hover:text-white p-3 rounded-xl bg-zinc-800/50 hover:bg-zinc-700 transition-colors"
-                          title="Download Original Quality"
-                        >
-                          <Download className="w-5 h-5" />
-                        </button>
-                        <button
-                          onClick={(e) => handleDelete(e, image.id)}
-                          className="text-zinc-400 hover:text-red-500 p-3 rounded-xl bg-zinc-800/50 hover:bg-red-500/10 transition-colors"
-                          title="Delete"
-                        >
-                          <Trash2 className="w-5 h-5" />
-                        </button>
-                      </div>
-                    </>
-                  )}
-
-                  {/* HOVER OVERLAY (Grid & Compact) */}
-                  {viewMode !== "list" && (
-                    <div className="absolute inset-0 bg-gradient-to-t from-black/90 via-black/20 to-transparent opacity-0 group-hover:opacity-100 transition-all duration-300 flex flex-col justify-end p-5">
-                      <div className="flex justify-between items-end translate-y-4 group-hover:translate-y-0 transition-transform duration-300">
-                        <div className="min-w-0 flex-1 pr-4">
-                          <p className="text-white font-medium truncate mb-2">
-                            {image.title || "Untitled"}
+                        <div className="p-4 flex flex-col flex-1 bg-zinc-900/50">
+                          <p className="text-white font-medium truncate">
+                            {image.title || "Untitled Asset"}
                           </p>
-                          <div className="flex gap-2">
-                            <span className="text-[10px] font-bold tracking-wider uppercase text-blue-400 bg-blue-400/20 backdrop-blur-md px-2 py-1 rounded-md">
+                          <div className="flex gap-2 mt-2">
+                            <span className="text-[10px] font-bold tracking-wider uppercase text-blue-400 bg-blue-400/10 px-2 py-1 rounded-md">
                               HD
+                            </span>
+                            <span className="text-[10px] font-bold tracking-wider uppercase text-zinc-400 bg-zinc-800 px-2 py-1 rounded-md">
+                              Raw
                             </span>
                           </div>
                         </div>
-                        <div className="flex items-center gap-2 shrink-0">
+                      </div>
+                    )}
+
+                    {/* LIST VIEW */}
+                    {viewMode === "list" && (
+                      <>
+                        <div className="w-full sm:w-48 aspect-video overflow-hidden rounded-xl shrink-0">
+                          <img
+                            src={getLowResPreviewUrl(
+                              image.thumbnail_url || image.url,
+                            )}
+                            alt={image.title || "Wallpaper"}
+                            className="w-full h-full object-cover transition-transform duration-700 group-hover:scale-105"
+                            loading="lazy"
+                            onError={(e) => handleImageError(e, image.url)}
+                          />
+                        </div>
+                        <div className="flex-1 min-w-0 w-full sm:w-auto text-center sm:text-left">
+                          <h3 className="text-lg font-bold text-white truncate">
+                            {image.title || "Untitled Asset"}
+                          </h3>
+                          <p className="text-zinc-500 text-sm mt-1">
+                            High definition wallpaper asset
+                          </p>
+                        </div>
+                        <div className="flex gap-2 w-full sm:w-auto justify-center sm:justify-end">
                           <button
                             onClick={(e) => {
                               e.stopPropagation();
                               handleDownload(image);
                             }}
-                            className="bg-white/10 hover:bg-white text-white hover:text-black p-2.5 rounded-full backdrop-blur-md transition-colors"
+                            className="text-zinc-400 hover:text-white p-3 rounded-xl bg-zinc-800/50 hover:bg-zinc-700 transition-colors"
+                            title="Download Original Quality"
                           >
-                            <Download className="w-4 h-4" />
+                            <Download className="w-5 h-5" />
                           </button>
                           <button
                             onClick={(e) => handleDelete(e, image.id)}
-                            className="bg-red-500/20 hover:bg-red-500 text-red-500 hover:text-white p-2.5 rounded-full backdrop-blur-md transition-colors"
+                            className="text-zinc-400 hover:text-red-500 p-3 rounded-xl bg-zinc-800/50 hover:bg-red-500/10 transition-colors"
+                            title="Delete"
                           >
-                            <Trash2 className="w-4 h-4" />
+                            <Trash2 className="w-5 h-5" />
                           </button>
                         </div>
+                      </>
+                    )}
+
+                    {/* HOVER OVERLAY (Grid & Compact) */}
+                    {viewMode !== "list" && (
+                      <div className="absolute inset-0 bg-gradient-to-t from-black/90 via-black/20 to-transparent opacity-0 group-hover:opacity-100 transition-all duration-300 flex flex-col justify-end p-5">
+                        <div className="flex justify-between items-end translate-y-4 group-hover:translate-y-0 transition-transform duration-300">
+                          <div className="min-w-0 flex-1 pr-4">
+                            <p className="text-white font-medium truncate mb-2">
+                              {image.title || "Untitled"}
+                            </p>
+                            <div className="flex gap-2">
+                              <span className="text-[10px] font-bold tracking-wider uppercase text-blue-400 bg-blue-400/20 backdrop-blur-md px-2 py-1 rounded-md">
+                                HD
+                              </span>
+                            </div>
+                          </div>
+                          <div className="flex items-center gap-2 shrink-0">
+                            <button
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                handleDownload(image);
+                              }}
+                              className="bg-white/10 hover:bg-white text-white hover:text-black p-2.5 rounded-full backdrop-blur-md transition-colors"
+                            >
+                              <Download className="w-4 h-4" />
+                            </button>
+                            <button
+                              onClick={(e) => handleDelete(e, image.id)}
+                              className="bg-red-500/20 hover:bg-red-500 text-red-500 hover:text-white p-2.5 rounded-full backdrop-blur-md transition-colors"
+                            >
+                              <Trash2 className="w-4 h-4" />
+                            </button>
+                          </div>
+                        </div>
                       </div>
-                    </div>
-                  )}
-                </motion.div>
-              ))
+                    )}
+                  </motion.div>
+                ))
+              )}
+            </div>
+
+            {/* Pagination Load More Button */}
+            {images.length > 0 && hasMore && (
+              <div className="flex justify-center mt-12">
+                <button
+                  onClick={() => {
+                    const nextPage = page + 1;
+                    setPage(nextPage);
+                    fetchImages(nextPage, false);
+                  }}
+                  className="bg-zinc-800 hover:bg-zinc-700 text-white px-8 py-3 rounded-full font-medium transition-colors border border-zinc-700 flex items-center gap-2"
+                >
+                  {isLoading && page > 0 ? (
+                    <Loader2 className="w-5 h-5 animate-spin" />
+                  ) : null}
+                  Load More Wallpapers
+                </button>
+              </div>
             )}
-          </div>
+          </>
         )}
       </main>
 
